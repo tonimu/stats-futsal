@@ -1264,7 +1264,8 @@
   .stats-filters {
     display: flex;
     gap: 14px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
     padding: 14px 16px;
     background: #f1f5f9;
     border-bottom: 1px solid #ffffff;
@@ -1274,6 +1275,7 @@
     flex-direction: column;
     gap: 6px;
     min-width: 180px;
+    flex-shrink: 0;
   }
   .stats-filter-group label {
     font-size: 10px;
@@ -1285,7 +1287,7 @@
   .chip-row {
     display: flex;
     gap: 4px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
   .filter-chip {
     padding: 6px 12px;
@@ -1306,13 +1308,20 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    max-height: 220px;
+    max-height: 280px;
     overflow-y: auto;
     background: #ffffff;
+    border: 1px solid #dde3ea;
     border-radius: 8px;
     padding: 6px;
     margin-top: 4px;
+    position: absolute;
+    z-index: 60;
+    min-width: 280px;
+    box-shadow: 0 8px 24px rgba(15,23,42,0.15);
   }
+  /* The Partidos group needs to anchor the floating dropdown */
+  #statsMatchGroup { position: relative; }
   .match-picker-item {
     display: flex;
     align-items: center;
@@ -1328,6 +1337,55 @@
   .match-picker-item .mp-info { flex: 1; min-width: 0; }
   .match-picker-item .mp-date { color: #334155; font-weight: 600; }
   .match-picker-item .mp-meta { color: #5b6776; font-size: 11px; }
+  /* Stats table: O/G/P/F compact cell */
+  .stats-table td.ogpf { font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; letter-spacing: -0.3px; }
+  /* Team comparison table */
+  .stats-table td.team-metric { text-align: left; font-weight: 600; color: #334155; }
+  .stats-table td.team-us { background: #eff6ff; font-weight: 700; color: #1e40af; font-variant-numeric: tabular-nums; }
+  .stats-table td.team-them { background: #fef2f2; font-weight: 700; color: #b91c1c; font-variant-numeric: tabular-nums; }
+  /* Team view: narrower, centered table */
+  .panel.team-narrow { max-width: 560px; margin-left: auto; margin-right: auto; }
+  .panel.team-narrow .stats-table { width: 100%; }
+  .stats-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  .stats-table th.sortable:hover { color: #2563eb; }
+  /* Highlighted goals row in team view */
+  .stats-table td.team-goals { font-size: 22px; font-weight: 800; font-family: "Archivo", sans-serif; }
+  /* Goal summary tables under the team comparison */
+  .goal-tables { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  .goal-table-block { }
+  .goal-table-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; color: #334155; }
+  .goal-table-block .goals-cell { font-weight: 800; font-variant-numeric: tabular-nums; }
+  @media (max-width: 560px) { .goal-tables { grid-template-columns: 1fr; } }
+  /* Top Stats */
+  .top-block-label {
+    font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;
+    margin: 14px 0 8px; padding: 4px 12px; border-radius: 6px; display: inline-block;
+  }
+  .top-block-label.positive { background: #dcfce7; color: #15803d; }
+  .top-block-label.negative { background: #fee2e2; color: #b91c1c; }
+  .top-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 12px;
+  }
+  .top-card {
+    background: #fff; border: 1px solid #dde3ea; border-radius: 12px; padding: 12px 14px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.04);
+  }
+  .top-card h4 { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: #334155; }
+  .top-row {
+    display: flex; align-items: center; gap: 8px; padding: 5px 0;
+    border-bottom: 1px solid #f1f5f9; font-size: 13px;
+  }
+  .top-row:last-child { border-bottom: none; }
+  .top-rank { width: 18px; color: #94a3b8; font-weight: 700; font-size: 12px; text-align: center; flex-shrink: 0; }
+  .top-num {
+    background: #1e293b; color: #fff; width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 10px; flex-shrink: 0;
+  }
+  .top-name { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .top-val { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .top-row.quintet .quintet-players { flex: 1; font-size: 11px; line-height: 1.3; font-weight: 600; }
   .match-picker-item .mp-active-badge {
     background: #16a34a;
     color: #fff;
@@ -1490,15 +1548,12 @@
       <button class="navtab" data-view="chem">
         <span class="navtab-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="6" cy="6" r="2.2"/>
-            <circle cx="18" cy="6" r="2.2"/>
-            <circle cx="6" cy="18" r="2.2"/>
-            <circle cx="18" cy="18" r="2.2"/>
-            <circle cx="12" cy="12" r="2.2"/>
-            <path d="M7.6 7.6l3 3M14.4 7.6l-3 3M7.6 16.4l3-3M14.4 16.4l-3-3"/>
+            <path d="M6 4h12v3a6 6 0 0 1-12 0z"/>
+            <path d="M6 5H4v1a3 3 0 0 0 3 3M18 5h2v1a3 3 0 0 1-3 3"/>
+            <path d="M12 13v3M9 20h6M10 16h4l0 4"/>
           </svg>
         </span>
-        <span class="navtab-label">Combinaciones</span>
+        <span class="navtab-label">Top Stats</span>
       </button>
       <button class="navtab" data-view="roster">
         <span class="navtab-icon">
@@ -1728,15 +1783,40 @@
         <button class="filter-chip" data-venue="Visitante">Visitante</button>
       </div>
     </div>
-    <div class="stats-filter-group" style="flex:1; min-width:240px;">
+    <div class="stats-filter-group" id="statsMatchGroup">
       <label>Partidos</label>
-      <div style="display:flex; gap:6px; align-items:center;">
-        <button class="btn btn-ghost btn-tiny" id="selectAllMatches">Todos</button>
-        <button class="btn btn-ghost btn-tiny" id="selectNoneMatches">Ninguno</button>
-        <button class="btn btn-ghost btn-tiny" id="selectActiveMatch">Solo el activo</button>
-        <span style="font-size:12px; color:#5b6776; margin-left:auto;" id="matchSelectionSummary">0 seleccionados</span>
+      <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+        <button class="filter-chip" id="selectAllMatches">Todos</button>
+        <button class="filter-chip" id="selectNoneMatches">Ninguno</button>
+        <button class="filter-chip" id="selectActiveMatch">Solo el activo</button>
+        <button class="btn btn-ghost btn-tiny" id="toggleMatchPicker" style="display:flex; align-items:center; gap:4px;">
+          <span id="matchSelectionSummary">0 seleccionados</span> ▾
+        </button>
       </div>
-      <div class="match-picker" id="matchPicker"></div>
+      <div class="match-picker" id="matchPicker" style="display:none;"></div>
+    </div>
+    <div class="stats-filter-group">
+      <label>Situación</label>
+      <div class="chip-row" id="filterJuego5">
+        <button class="filter-chip active" data-j5="all">Todo</button>
+        <button class="filter-chip" data-j5="j5for">CNS de 5</button>
+        <button class="filter-chip" data-j5="j5against">Rival de 5</button>
+      </div>
+    </div>
+    <div class="stats-filter-group">
+      <label>Cálculo</label>
+      <div class="chip-row" id="filterCalc">
+        <button class="filter-chip active" data-calc="total">Totales</button>
+        <button class="filter-chip" data-calc="perMatch">Por partido</button>
+        <button class="filter-chip" data-calc="perTime">Por minuto</button>
+      </div>
+    </div>
+    <div class="stats-filter-group">
+      <label>Vista</label>
+      <div class="chip-row" id="filterView">
+        <button class="filter-chip active" data-statview="player">Jugador</button>
+        <button class="filter-chip" data-statview="team">Equipo</button>
+      </div>
     </div>
   </div>
 
@@ -1745,7 +1825,7 @@
       <div class="panel-title">Posesión</div>
       <div id="possessionSummary"></div>
     </div>
-    <div class="panel">
+    <div class="panel" id="statsTablePanel">
       <div class="panel-title" id="statsTablePanelTitle">Estadísticas</div>
       <div style="overflow-x: auto;">
         <table class="stats-table" id="statsTable"></table>
@@ -1757,18 +1837,69 @@
 <!-- ===== CHEMISTRY VIEW ===== -->
 <div class="view" id="view-chem">
   <div class="view-header">
-    <span class="view-header-icon">🔗</span>
-    <span class="view-header-title">Combinaciones</span>
-    <span class="view-header-sub">Eficacia por parejas y quintetos</span>
+    <span class="view-header-icon">🏆</span>
+    <span class="view-header-title">Top Stats</span>
+    <span class="view-header-sub" id="topHeaderSub">—</span>
   </div>
-  <div style="padding: 16px;">
-    <div class="panel">
-      <div class="panel-title">Combinaciones en pista (eventos generados por quintetos / parejas)</div>
-      <div style="margin-bottom: 12px; font-size: 13px; color: #5b6776;">
-        Muestra qué jugadores estaban juntos cuando ocurrieron eventos positivos (goles, asistencias, ocasiones, recuperaciones) y negativos (pérdidas, goles encajados con culpa).
+
+  <!-- Filters (shared logic with Estadísticas) -->
+  <div class="stats-filters">
+    <div class="stats-filter-group">
+      <label>Competición</label>
+      <div class="chip-row" id="topFilterCompetition">
+        <button class="filter-chip active" data-comp="">Todas</button>
+        <button class="filter-chip" data-comp="Liga">Liga</button>
+        <button class="filter-chip" data-comp="Copa">Copa</button>
+        <button class="filter-chip" data-comp="Amistoso">Amistoso</button>
       </div>
-      <div class="chem-grid" id="chemGrid"></div>
     </div>
+    <div class="stats-filter-group">
+      <label>Local / Visitante</label>
+      <div class="chip-row" id="topFilterVenue">
+        <button class="filter-chip active" data-venue="">Todos</button>
+        <button class="filter-chip" data-venue="Local">Local</button>
+        <button class="filter-chip" data-venue="Visitante">Visitante</button>
+      </div>
+    </div>
+    <div class="stats-filter-group" id="topMatchGroup">
+      <label>Partidos</label>
+      <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+        <button class="filter-chip" id="topSelectAll">Todos</button>
+        <button class="filter-chip" id="topSelectNone">Ninguno</button>
+        <button class="filter-chip" id="topSelectActive">Solo el activo</button>
+        <button class="btn btn-ghost btn-tiny" id="topToggleMatchPicker" style="display:flex; align-items:center; gap:4px;">
+          <span id="topMatchSummary">0 seleccionados</span> ▾
+        </button>
+      </div>
+      <div class="match-picker" id="topMatchPicker" style="display:none;"></div>
+    </div>
+    <div class="stats-filter-group">
+      <label>Situación</label>
+      <div class="chip-row" id="topFilterJuego5">
+        <button class="filter-chip active" data-j5="all">Todo</button>
+        <button class="filter-chip" data-j5="j5for">CNS de 5</button>
+        <button class="filter-chip" data-j5="j5against">Rival de 5</button>
+      </div>
+    </div>
+    <div class="stats-filter-group">
+      <label>Cálculo</label>
+      <div class="chip-row" id="topFilterCalc">
+        <button class="filter-chip active" data-calc="total">Totales</button>
+        <button class="filter-chip" data-calc="perMatch">Por partido</button>
+        <button class="filter-chip" data-calc="perTime">Por minuto</button>
+      </div>
+    </div>
+    <div class="stats-filter-group">
+      <label>Vista</label>
+      <div class="chip-row" id="topFilterView">
+        <button class="filter-chip active" data-topview="player">Jugador</button>
+        <button class="filter-chip" data-topview="team">Quintetos</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding: 0 16px 16px;">
+    <div id="topStatsContent"></div>
   </div>
 </div>
 
@@ -3064,7 +3195,9 @@ async function logOpponentChance(result) {
     id: 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
     matchId: state.match.id,
     type: 'opp_chance',
-    playerId: null,
+    // Always record the goalkeeper on court (slot 0), regardless of the result,
+    // so the GK is attributed every opponent chance (fuera / parada / gol).
+    playerId: state.match.onCourt[0] || null,
     time: currentMatchSeconds(),
     period: state.match.timer.period,
     onCourt: [...state.match.onCourt],
@@ -3073,15 +3206,11 @@ async function logOpponentChance(result) {
     result, // 'fuera' | 'parada' | 'gol'
   };
 
-  if (result === 'parada') {
-    // Auto-assign to the goalkeeper on court (slot 0)
-    evt.playerId = state.match.onCourt[0] || null;
-  } else if (result === 'gol') {
+  if (result === 'gol') {
     state.match.scoreAgainst++;
     // Official futsal rule: conceding a goal cancels the oldest active sanction
     if (state.match.sanctions.length > 0) {
-      const cancelled = state.match.sanctions.shift();
-      // Notify briefly
+      state.match.sanctions.shift();
       setTimeout(() => alert(`Inferioridad: puedes recuperar al 5º jugador (gol encajado cancela la sanción).`), 50);
     }
   }
@@ -3118,12 +3247,26 @@ function closeActivePossessionIfAny() { /* no-op */ }
 // ============================================================
 // Each tap registers a possession event. The duration of a possession is the
 // elapsed time until the next possession event (or the end of the period).
-async function switchPossession(team) {
+// `j5` marks whether this possession is a power play (the team in possession
+// is playing with the goalkeeper-outfield / 5 attackers).
+async function switchPossession(team, j5 = false) {
+  // If possession goes to a team, the other team can't be in power play anymore.
+  // And the team gaining possession is only "j5" if explicitly flagged.
+  if (team === 'for') {
+    state.match.juego5Against = false;
+    if (!j5) state.match.juego5For = false;
+    else state.match.juego5For = true;
+  } else {
+    state.match.juego5For = false;
+    if (!j5) state.match.juego5Against = false;
+    else state.match.juego5Against = true;
+  }
   const evt = {
     id: 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
     matchId: state.match.id,
     type: 'possession',
     team,                       // 'for' | 'against'
+    j5: !!j5,                   // was this possession a 5-attacker power play
     playerId: null,
     time: currentMatchSeconds(),
     period: state.match.timer.period,
@@ -3135,6 +3278,48 @@ async function switchPossession(team) {
   await saveEvent(evt);
   await saveCurrentMatch();
   renderAll();
+}
+
+// Returns the current (last) possession event, or null.
+function currentPossession() {
+  const poss = state.match.events.filter(e => e.type === 'possession');
+  return poss.length ? poss[poss.length - 1] : null;
+}
+
+// Toggle "Juego de 5" for a side, applying the possession logic:
+//  - Activating one side turns the other OFF (only one team plays 5 at a time).
+//  - 'for'  → power play means WE have the ball.
+//  - 'against' → power play means THEY have the ball.
+// If the active possession already belongs to that team, just mark it as j5.
+// Otherwise, close the current possession and open a new one for that team (j5=true).
+async function setJuego5(side) {
+  const m = state.match;
+  if (!m) return;
+  const turningOn = (side === 'for') ? !m.juego5For : !m.juego5Against;
+
+  if (turningOn) {
+    // Only one side can be in power play
+    m.juego5For = (side === 'for');
+    m.juego5Against = (side === 'against');
+    const team = (side === 'for') ? 'for' : 'against';
+    const cur = currentPossession();
+    if (cur && cur.team === team) {
+      // Same team already has the ball → just mark current possession as j5
+      cur.j5 = true;
+      await saveEvent(cur);
+      await saveCurrentMatch();
+      renderAll();
+    } else {
+      // Open a new possession for that team, marked as power play
+      await switchPossession(team, true);
+    }
+  } else {
+    // Turning OFF: just clear the flag. Possession continues as-is (no longer j5).
+    if (side === 'for') m.juego5For = false;
+    else m.juego5Against = false;
+    await saveCurrentMatch();
+    renderAll();
+  }
 }
 
 // Compute possession stats from possession events.
@@ -3658,7 +3843,8 @@ function buildEventRow(evt) {
     else end = PERIOD_LENGTH_SECONDS;
     const dur = Math.max(0, end - evt.time);
     const teamTxt = evt.team === 'for' ? '🔵 Nuestra' : '🔴 Rival';
-    label = `${teamTxt} · ${formatTime(dur)}`;
+    const j5txt = evt.j5 ? ' ⚡5' : '';
+    label = `${teamTxt}${j5txt} · ${formatTime(dur)}`;
   }
   // J5 marker on the row (so we know if it happened during a power play)
   let j5mark = '';
@@ -3835,6 +4021,9 @@ const statsFilters = {
   competition: '',         // '' | 'Liga' | 'Copa' | 'Amistoso'
   venue: '',               // '' | 'Local' | 'Visitante'
   selectedMatchIds: null,  // Set of match ids; null = "uninitialised — pick default"
+  j5: 'all',               // 'all' | 'j5for' | 'j5against'
+  calc: 'total',           // 'total' | 'perMatch' | 'perTime'
+  view: 'player',          // 'player' | 'team'
 };
 
 // Returns the list of "match-like records": the active match plus saved matches.
@@ -3927,8 +4116,32 @@ async function loadMatchData(matchId, isActive) {
   return _matchDataCache[matchId];
 }
 
+// Does an event match the current J5 situation filter?
+function eventMatchesJ5(e) {
+  if (statsFilters.j5 === 'all') return true;
+  if (statsFilters.j5 === 'j5for') return !!e.juego5For;
+  if (statsFilters.j5 === 'j5against') return !!e.juego5Against;
+  return true;
+}
+
+// Get the set of convoked player ids for a given match (via its linked activity).
+// Convoked = attendance asistencia true (Sí) or puntualidad late (Tarde) — i.e. they showed up.
+// Convoked = the player attended (asistencia === true). This includes players
+// who arrived late, since "tarde" is a punctuality flag but they still attended.
+// A player absent due to injury/suspension (asistencia false/null) does NOT count.
+function convokedIdsForMatch(m) {
+  const act = m.activity;
+  if (!act) return null;
+  const recs = state.attendanceByActivity[act.id];
+  if (!recs || recs.length === 0) return null;
+  const ids = new Set();
+  recs.forEach(r => {
+    if (r.personType === 'player' && r.asistencia === true) ids.add(r.personId);
+  });
+  return ids;
+}
+
 // Compute aggregated stats across multiple matches.
-// Returns: {byPlayer: {pid: {minutes, goals, ..., matchesPlayed}}, matchCount}
 async function computeAggregatedStats(selectedMatches) {
   const byPlayer = {};
   state.roster.forEach(p => {
@@ -3937,32 +4150,47 @@ async function computeAggregatedStats(selectedMatches) {
       id: p.id, name: p.name, alias: p.alias, number: p.number,
       position: p.position, isGK: p.isGK,
       minutes: 0,
-      goals: 0,            // chances ending in gol
-      chances: 0,          // total chances executed (any result)
-      chancesOff: 0,       // chances ending fuera
-      chancesSaved: 0,     // chances saved by rival GK
-      assistsGoal: 0,      // assists that led to a goal
-      assistsNoGoal: 0,    // assists without goal
+      goals: 0, chances: 0, chancesOff: 0, chancesSaved: 0,
+      assistsGoal: 0, assistsNoGoal: 0,
       recoveries: 0, losses: 0, fouls: 0,
       yellows: 0, reds: 0,
-      saves: 0,            // saves made (GK) — from opp_chance result=parada
-      gaBlame: 0,          // conceded goals where this player was at fault
-      matchesPlayed: 0,
+      saves: 0,             // GK: opponent chances we stopped
+      oppChances: 0,        // GK: opponent chances faced (as GK on court)
+      oppGoals: 0,          // GK: goals conceded while on court
+      oppOff: 0,            // GK: opponent chances that went out
+      gaBlame: 0,
+      matchesPlayed: 0,     // convoked count
     };
   });
 
   for (const m of selectedMatches) {
     const data = await loadMatchData(m.id, m.isActive);
-    const appeared = new Set();
+
+    // matchesPlayed = convoked players (by attendance) for this match.
+    const convoked = convokedIdsForMatch(m);
+    if (convoked) {
+      convoked.forEach(pid => { if (byPlayer[pid]) byPlayer[pid].matchesPlayed++; });
+    } else {
+      // No attendance data: count everyone who has minutes or an event as participating
+      const appeared = new Set();
+      Object.entries(data.subs).forEach(([pid, s]) => {
+        const mins = m.isActive ? getPlayerMatchSeconds(pid) : (s.totalSeconds||0);
+        if (mins > 0) appeared.add(pid);
+      });
+      data.events.forEach(e => { if (e.playerId) appeared.add(e.playerId); });
+      appeared.forEach(pid => { if (byPlayer[pid]) byPlayer[pid].matchesPlayed++; });
+    }
+
+    // Minutes (not affected by J5 filter — minutes are minutes)
     for (const [pid, s] of Object.entries(data.subs)) {
       if (!byPlayer[pid]) continue;
       const mins = m.isActive ? getPlayerMatchSeconds(pid) : (s.totalSeconds || 0);
-      if (mins > 0) {
-        byPlayer[pid].minutes += mins;
-        appeared.add(pid);
-      }
+      if (mins > 0) byPlayer[pid].minutes += mins;
     }
+
+    // Events (filtered by J5 situation)
     for (const e of data.events) {
+      if (!eventMatchesJ5(e)) continue;
       if (!e.playerId || !byPlayer[e.playerId]) continue;
       const s = byPlayer[e.playerId];
       if (e.type === 'chance') {
@@ -3970,23 +4198,84 @@ async function computeAggregatedStats(selectedMatches) {
         if (e.result === 'gol') s.goals++;
         else if (e.result === 'parada') s.chancesSaved++;
         else s.chancesOff++;
-      } else if (e.type === 'assist_goal') {
-        s.assistsGoal++;
-      } else if (e.type === 'assist_nogoal') {
-        s.assistsNoGoal++;
-      } else if (e.type === 'recovery') s.recoveries++;
+      } else if (e.type === 'assist_goal') s.assistsGoal++;
+      else if (e.type === 'assist_nogoal') s.assistsNoGoal++;
+      else if (e.type === 'recovery') s.recoveries++;
       else if (e.type === 'loss') s.losses++;
       else if (e.type === 'foul') s.fouls++;
       else if (e.type === 'yellow') s.yellows++;
       else if (e.type === 'red') s.reds++;
-      else if (e.type === 'opp_chance' && e.result === 'parada') s.saves++;
       else if (e.type === 'ga_blame') s.gaBlame++;
-      appeared.add(e.playerId);
+      else if (e.type === 'opp_chance') {
+        // Attribute opponent chances to the GK: prefer the stored playerId
+        // (now always set), fall back to slot 0 for older events.
+        const gkId = e.playerId || (e.onCourt && e.onCourt[0]);
+        if (gkId && byPlayer[gkId]) {
+          byPlayer[gkId].oppChances++;
+          if (e.result === 'parada') byPlayer[gkId].saves++;
+          else if (e.result === 'gol') byPlayer[gkId].oppGoals++;
+          else byPlayer[gkId].oppOff++;
+        }
+      }
     }
-    appeared.forEach(pid => { byPlayer[pid].matchesPlayed++; });
   }
 
   return {byPlayer, matchCount: selectedMatches.length};
+}
+
+// Compute team-level aggregated stats (us vs opponent) across selected matches.
+async function computeTeamStats(selectedMatches) {
+  const us = {goals:0, chances:0, chancesOff:0, chancesSaved:0, recoveries:0, losses:0, fouls:0, yellows:0, reds:0, possCount:0, possTime:0};
+  const them = {goals:0, chances:0, chancesOff:0, chancesSaved:0, recoveries:0, losses:0, fouls:0, yellows:0, reds:0, possCount:0, possTime:0};
+
+  for (const m of selectedMatches) {
+    const data = await loadMatchData(m.id, m.isActive);
+    const evts = data.events;
+    // Possession durations.
+    // For the LAST possession of a period: if this is the active match's current
+    // period, it only counts up to the current clock (not the full 20:00),
+    // matching how the Match tab computes it. Otherwise (finished match or past
+    // period) it runs to the end of the period.
+    const possEvts = evts.filter(e => e.type === 'possession').sort((a,b)=>(a.period-b.period)||(a.time-b.time));
+    for (let i=0;i<possEvts.length;i++){
+      const e = possEvts[i]; const next = possEvts[i+1];
+      // Apply the J5 situation filter to possessions:
+      //  - 'j5for'/'j5against': only count possessions flagged as power play (j5)
+      // (We still use the next possession's time to measure this one's duration.)
+      if (statsFilters.j5 !== 'all' && !e.j5) continue;
+      let end;
+      if (next && next.period===e.period) {
+        end = next.time;
+      } else if (m.isActive && e.period === state.match.timer.period) {
+        end = Math.min(currentMatchSeconds(), PERIOD_LENGTH_SECONDS);
+      } else {
+        end = PERIOD_LENGTH_SECONDS;
+      }
+      const dur = Math.max(0, end - e.time);
+      if (e.team==='for'){ us.possCount++; us.possTime+=dur; }
+      else { them.possCount++; them.possTime+=dur; }
+    }
+    for (const e of evts) {
+      if (!eventMatchesJ5(e)) continue;
+      if (e.type === 'chance') {
+        us.chances++;
+        if (e.result==='gol') us.goals++;
+        else if (e.result==='parada') us.chancesSaved++;
+        else us.chancesOff++;
+      } else if (e.type === 'recovery') us.recoveries++;
+      else if (e.type === 'loss') us.losses++;
+      else if (e.type === 'foul') us.fouls++;
+      else if (e.type === 'yellow') us.yellows++;
+      else if (e.type === 'red') us.reds++;
+      else if (e.type === 'opp_chance') {
+        them.chances++;
+        if (e.result==='gol') them.goals++;
+        else if (e.result==='parada') them.chancesSaved++; // we saved → their chance "saved"
+        else them.chancesOff++;
+      } else if (e.type === 'opp_foul') them.fouls++;
+    }
+  }
+  return {us, them, matchCount: selectedMatches.length};
 }
 
 function renderStatsFilters() {
@@ -3997,16 +4286,23 @@ function renderStatsFilters() {
   document.querySelectorAll('#filterVenue .filter-chip').forEach(c => {
     c.classList.toggle('active', (c.dataset.venue || '') === statsFilters.venue);
   });
+  document.querySelectorAll('#filterJuego5 .filter-chip').forEach(c => {
+    c.classList.toggle('active', (c.dataset.j5 || 'all') === statsFilters.j5);
+  });
+  document.querySelectorAll('#filterCalc .filter-chip').forEach(c => {
+    c.classList.toggle('active', (c.dataset.calc || 'total') === statsFilters.calc);
+  });
+  document.querySelectorAll('#filterView .filter-chip').forEach(c => {
+    c.classList.toggle('active', (c.dataset.statview || 'player') === statsFilters.view);
+  });
+  // Highlight the active match-selection button (Todos / Ninguno / Solo activo)
+  document.getElementById('selectAllMatches').classList.toggle('active', statsFilters.matchSelMode === 'all');
+  document.getElementById('selectNoneMatches').classList.toggle('active', statsFilters.matchSelMode === 'none');
+  document.getElementById('selectActiveMatch').classList.toggle('active', statsFilters.matchSelMode === 'active');
   // Build the match picker, applying competition + venue filters
   const all = getAllMatchesForStats();
   const filtered = applyMatchFilters(all);
-  // Remove selections that are no longer available
-  if (statsFilters.selectedMatchIds) {
-    const visibleIds = new Set(filtered.map(m => m.id));
-    [...statsFilters.selectedMatchIds].forEach(id => {
-      if (!visibleIds.has(id)) statsFilters.selectedMatchIds.delete(id);
-    });
-  }
+  // Note: selection sync on filter change is handled by resyncSelectionToFilters().
   const picker = document.getElementById('matchPicker');
   if (!picker) return;
   picker.innerHTML = '';
@@ -4055,75 +4351,166 @@ function renderStatsSummary() {
     n === 0 ? 'ninguno seleccionado' : (n === 1 ? '1 partido seleccionado' : `${n} partidos seleccionados`);
 }
 
+// Format a number with up to 3 decimals (no trailing zeros), or '' if zero.
+function fmtNum(n, blankZero = true) {
+  if (!n) return blankZero ? '' : '0';
+  const r = Math.round(n * 1000) / 1000;
+  return Number.isInteger(r) ? String(r) : r.toFixed(3).replace(/0+$/,'').replace(/\.$/,'');
+}
+
 async function renderStats() {
   initStatsSelectionIfNeeded();
 
   const subEl = document.getElementById('statsHeaderSub');
   const titleEl = document.getElementById('statsTablePanelTitle');
   const table = document.getElementById('statsTable');
+  if (!table) return;
 
   const allMatches = getAllMatchesForStats();
   const filtered = applyMatchFilters(allMatches);
   const selected = filtered.filter(m => statsFilters.selectedMatchIds.has(m.id));
 
+  // The possession panel is shown only in the Player view — in Team view the
+  // possession data already lives inside the comparison table.
+  const possPanel = document.getElementById('possessionPanel');
+  const tablePanel = document.getElementById('statsTablePanel');
+  if (statsFilters.view === 'team') {
+    if (possPanel) possPanel.style.display = 'none';
+    if (tablePanel) tablePanel.classList.add('team-narrow');
+  } else {
+    if (possPanel) possPanel.style.display = '';
+    if (tablePanel) tablePanel.classList.remove('team-narrow');
+    const extra = document.getElementById('teamGoalTables');
+    if (extra) extra.style.display = 'none';
+    await renderPossessionPanel(selected);
+  }
+
   if (selected.length === 0) {
     subEl.textContent = 'Ningún partido seleccionado';
     titleEl.textContent = 'Estadísticas';
     table.innerHTML = `<tr><td style="padding:20px; text-align:center; color:#5b6776;">
-      Selecciona uno o más partidos arriba para ver estadísticas.
+      Selecciona uno o más partidos en el desplegable para ver estadísticas.
     </td></tr>`;
     return;
   }
 
-  // Loading placeholder
-  subEl.textContent = `${selected.length} partido${selected.length === 1 ? '' : 's'} seleccionado${selected.length === 1 ? '' : 's'}`;
-  titleEl.textContent = selected.length === 1
-    ? 'Estadísticas del partido'
-    : `Estadísticas agregadas (${selected.length} partidos)`;
+  const j5txt = statsFilters.j5 === 'j5for' ? ' · jugando de 5'
+              : statsFilters.j5 === 'j5against' ? ' · rival de 5' : '';
+  subEl.textContent = `${selected.length} partido${selected.length===1?'':'s'}${j5txt}`;
 
-  const {byPlayer, matchCount} = await computeAggregatedStats(selected);
-  const rows = Object.values(byPlayer)
-    .filter(s => s.minutes > 0 || s.goals || s.chances || s.assistsGoal || s.assistsNoGoal || s.recoveries || s.losses || s.fouls || s.yellows || s.reds || s.saves || s.gaBlame)
-    .sort((a, b) => b.minutes - a.minutes);
-
-  const showAvg = matchCount > 1;
-
-  // Helper to render a numeric cell as "total / avg"
-  function cell(total, isMinutes) {
-    if (showAvg) {
-      const avg = total / matchCount;
-      const totalStr = isMinutes ? formatTime(total) : (total || 0);
-      const avgStr = isMinutes ? formatTime(avg) : (avg ? avg.toFixed(1) : '—');
-      return `<td><div class="total-val">${totalStr || '—'}</div><div class="avg-val">${avgStr}</div></td>`;
+  // Preload attendance for the linked activities (needed for "per match" calc)
+  for (const m of selected) {
+    if (m.activity && !state.attendanceByActivity[m.activity.id]) {
+      await loadAttendanceForActivity(m.activity.id);
     }
-    const v = isMinutes ? formatTime(total) : (total || '');
-    return `<td>${v}</td>`;
   }
 
-  const colHead = (label, title) => showAvg
-    ? `<th${title ? ` title="${title}"` : ''}>${label}<br><span style="color:#5b6776; font-size:10px; font-weight:500;">total / media</span></th>`
-    : `<th${title ? ` title="${title}"` : ''}>${label}</th>`;
+  if (statsFilters.view === 'team') {
+    await renderTeamStats(selected);
+  } else {
+    await renderPlayerStats(selected);
+  }
+}
+
+// ---- PLAYER VIEW ----
+async function renderPlayerStats(selected) {
+  const titleEl = document.getElementById('statsTablePanelTitle');
+  const table = document.getElementById('statsTable');
+  const calc = statsFilters.calc; // 'total' | 'perMatch' | 'perTime'
+
+  titleEl.textContent = calc === 'perMatch' ? 'Por jugador · por partido'
+                      : calc === 'perTime' ? 'Por jugador · por minuto'
+                      : 'Por jugador · totales';
+
+  const {byPlayer} = await computeAggregatedStats(selected);
+  let rows = Object.values(byPlayer).filter(s =>
+    s.minutes>0 || s.goals || s.chances || s.assistsGoal || s.assistsNoGoal ||
+    s.recoveries || s.losses || s.fouls || s.yellows || s.reds || s.saves ||
+    s.gaBlame || s.oppChances || s.matchesPlayed);
+
+  // Sorting: default by chances desc. statsFilters.sortKey/sortDir control it.
+  const sortKey = statsFilters.sortKey || 'chances';
+  const sortDir = statsFilters.sortDir || 'desc';
+  const sortVal = (s) => {
+    switch (sortKey) {
+      case 'number': return s.number || 0;
+      case 'name': return (s.alias || s.name || '').toLowerCase();
+      case 'position': return s.position || '';
+      case 'matchesPlayed': return s.matchesPlayed || 0;
+      case 'minutes': return s.minutes || 0;
+      case 'goals': return s.goals || 0;
+      case 'chances': return s.chances || 0;
+      case 'assistsGoal': return s.assistsGoal || 0;
+      case 'assistsNoGoal': return s.assistsNoGoal || 0;
+      case 'recoveries': return s.recoveries || 0;
+      case 'losses': return s.losses || 0;
+      case 'gaBlame': return s.gaBlame || 0;
+      case 'fouls': return s.fouls || 0;
+      case 'yellows': return s.yellows || 0;
+      case 'reds': return s.reds || 0;
+      case 'oppGoals': return s.oppGoals || 0;
+      case 'oppChances': return s.oppChances || 0;
+      default: return 0;
+    }
+  };
+  rows.sort((a, b) => {
+    const va = sortVal(a), vb = sortVal(b);
+    let cmp;
+    if (typeof va === 'string') cmp = va.localeCompare(vb);
+    else cmp = va - vb;
+    if (cmp === 0) cmp = (b.chances - a.chances); // tie-break
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
+
+  // Transform a raw value according to the calc mode for a given player row.
+  function v(s, raw) {
+    if (calc === 'total') return fmtNum(raw);
+    if (calc === 'perMatch') return s.matchesPlayed ? fmtNum(raw / s.matchesPlayed) : '';
+    if (calc === 'perTime') {
+      const mins = s.minutes / 60;
+      return mins > 0 ? fmtNum(raw / mins) : '';
+    }
+    return fmtNum(raw);
+  }
+  function minCell(s) {
+    if (calc === 'perMatch' && s.matchesPlayed) return formatTime(s.minutes / s.matchesPlayed);
+    return formatTime(s.minutes);
+  }
+  function ogpf(s) {
+    if (calc === 'total') return `${s.chances}/${s.goals}/${s.chancesSaved}/${s.chancesOff}`;
+    return `${v(s,s.chances)||0}/${v(s,s.goals)||0}/${v(s,s.chancesSaved)||0}/${v(s,s.chancesOff)||0}`;
+  }
+  function ogpfGK(s) {
+    if (calc === 'total') return `${s.oppChances}/${s.oppGoals}/${s.saves}/${s.oppOff}`;
+    return `${v(s,s.oppChances)||0}/${v(s,s.oppGoals)||0}/${v(s,s.saves)||0}/${v(s,s.oppOff)||0}`;
+  }
+
+  // Sortable header helper: shows ▲/▼ on the active column.
+  const sh = (key, label, title) => {
+    const arrow = sortKey === key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+    const t = title ? ` title="${title}"` : '';
+    return `<th class="sortable" data-sort="${key}"${t}>${label}${arrow}</th>`;
+  };
 
   table.innerHTML = `
     <thead><tr>
-      <th>#</th>
-      <th style="text-align:left;">Jugador</th>
-      <th>Pos</th>
-      ${showAvg ? '<th>PJ</th>' : ''}
-      ${colHead('Min')}
-      ${colHead('G', 'Goles')}
-      ${colHead('Ocas', 'Ocasiones totales (tiros)')}
-      ${colHead('Fuera', 'Ocasiones fuera')}
-      ${colHead('Par.Riv', 'Ocasiones detenidas por el portero rival')}
-      ${colHead('A·G', 'Asistencias que acabaron en gol')}
-      ${colHead('A·SG', 'Asistencias sin gol')}
-      ${colHead('Recup', 'Recuperaciones')}
-      ${colHead('Pérd', 'Pérdidas')}
-      ${colHead('Faltas')}
-      ${colHead('🟨')}
-      ${colHead('🟥')}
-      ${colHead('Paradas', 'Paradas hechas (portero)')}
-      ${colHead('GE·C', 'Goles encajados por culpa de este jugador')}
+      ${sh('number', '#')}
+      <th class="sortable" data-sort="name" style="text-align:left;">Jugador${sortKey==='name'?(sortDir==='asc'?' ▲':' ▼'):''}</th>
+      ${sh('position', 'Pos')}
+      ${sh('matchesPlayed', 'PC', 'Partidos convocado')}
+      ${sh('minutes', 'Min')}
+      ${sh('goals', 'G', 'Goles')}
+      ${sh('chances', 'O/G/P/F', 'Ocasiones/Goles/Paradas rival/Fuera (ordena por ocasiones)')}
+      ${sh('assistsGoal', 'A·G', 'Asistencias de gol')}
+      ${sh('assistsNoGoal', 'A·SG', 'Asistencias sin gol')}
+      ${sh('recoveries', 'Recup', 'Recuperaciones')}
+      ${sh('losses', 'Pérd', 'Pérdidas')}
+      ${sh('gaBlame', 'GE·C', 'Goles encajados por su culpa')}
+      ${sh('fouls', 'Faltas', 'Faltas')}
+      ${sh('yellows', '🟨')}
+      ${sh('reds', '🟥')}
+      ${sh('oppGoals', 'G.Enc', 'Portero: Goles encajados')}
+      ${sh('oppChances', 'O/G/P/F', 'Portero: Ocasiones/Goles/Paradas/Fuera recibidas')}
     </tr></thead>
     <tbody>
       ${rows.map(s => `
@@ -4131,118 +4518,319 @@ async function renderStats() {
           <td>${s.number}</td>
           <td class="name">${escapeHtml(s.alias || s.name)}</td>
           <td><span class="pos-pill pos-${s.position}">${s.position}</span></td>
-          ${showAvg ? `<td>${s.matchesPlayed}</td>` : ''}
-          ${cell(s.minutes, true)}
-          ${cell(s.goals)}
-          ${cell(s.chances)}
-          ${cell(s.chancesOff)}
-          ${cell(s.chancesSaved)}
-          ${cell(s.assistsGoal)}
-          ${cell(s.assistsNoGoal)}
-          ${cell(s.recoveries)}
-          ${cell(s.losses)}
-          ${cell(s.fouls)}
-          ${cell(s.yellows)}
-          ${cell(s.reds)}
-          ${cell(s.saves)}
-          ${cell(s.gaBlame)}
+          <td>${s.matchesPlayed || ''}</td>
+          <td>${minCell(s)}</td>
+          <td>${v(s, s.goals)}</td>
+          <td class="ogpf">${ogpf(s)}</td>
+          <td>${v(s, s.assistsGoal)}</td>
+          <td>${v(s, s.assistsNoGoal)}</td>
+          <td>${v(s, s.recoveries)}</td>
+          <td>${v(s, s.losses)}</td>
+          <td>${v(s, s.gaBlame)}</td>
+          <td>${v(s, s.fouls)}</td>
+          <td>${v(s, s.yellows)}</td>
+          <td>${v(s, s.reds)}</td>
+          <td>${s.isGK || s.oppChances ? v(s, s.oppGoals) : '—'}</td>
+          <td class="ogpf">${s.isGK || s.oppChances ? ogpfGK(s) : '—'}</td>
         </tr>
       `).join('')}
     </tbody>
   `;
+  // Wire up sortable headers
+  table.querySelectorAll('th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sort;
+      if (statsFilters.sortKey === key) {
+        statsFilters.sortDir = (statsFilters.sortDir === 'asc') ? 'desc' : 'asc';
+      } else {
+        statsFilters.sortKey = key;
+        // Names default to ascending (A→Z); numbers default to descending (high→low)
+        statsFilters.sortDir = (key === 'name' || key === 'position') ? 'asc' : 'desc';
+      }
+      renderStats();
+    });
+  });
   if (rows.length === 0) {
     table.innerHTML = '<tr><td style="padding:20px; text-align:center; color:#5b6776;">Sin datos para los partidos seleccionados.</td></tr>';
   }
 }
 
-function renderChemistry() {
-  // Classify each event as positive / negative for chemistry purposes.
-  function eventPolarity(e) {
-    if (e.type === 'chance') {
-      if (e.result === 'gol') return 'pos';
-      if (e.result === 'parada') return 'pos'; // generated a chance (shot on target)
-      return 'neutral'; // fuera
-    }
-    if (e.type === 'assist_goal' || e.type === 'assist_nogoal') return 'pos';
-    if (e.type === 'recovery') return 'pos';
-    if (e.type === 'opp_chance') {
-      if (e.result === 'gol') return 'neg';     // conceded
-      if (e.result === 'parada') return 'neutral'; // our GK saved it
-      return 'neutral';
-    }
-    if (e.type === 'loss') return 'neg';
-    if (e.type === 'ga_blame') return 'neg';
-    return 'neutral';
+// ---- TEAM VIEW (us vs opponent) ----
+async function renderTeamStats(selected) {
+  const titleEl = document.getElementById('statsTablePanelTitle');
+  const table = document.getElementById('statsTable');
+  titleEl.textContent = 'Equipo · nosotros vs rival';
+
+  const {us, them} = await computeTeamStats(selected);
+  const usPct = (us.possTime + them.possTime) ? Math.round(us.possTime/(us.possTime+them.possTime)*100) : 0;
+  const themPct = (us.possTime + them.possTime) ? 100 - usPct : 0;
+  const usAvg = us.possCount ? us.possTime/us.possCount : 0;
+  const themAvg = them.possCount ? them.possTime/them.possCount : 0;
+
+  const row = (label, u, t) => `<tr><td class="team-metric">${label}</td><td class="team-us">${u}</td><td class="team-them">${t}</td></tr>`;
+  // Goals row: highlighted (bold + larger)
+  const goalsRow = `<tr><td class="team-metric">⚽ Goles</td><td class="team-us team-goals">${us.goals}</td><td class="team-them team-goals">${them.goals}</td></tr>`;
+
+  // Per-player goals scored and goals conceded (GK on court), for the summary tables.
+  const {byPlayer} = await computeAggregatedStats(selected);
+  const scorers = Object.values(byPlayer).filter(s => s.goals > 0)
+    .sort((a,b) => b.goals - a.goals);
+  const conceders = Object.values(byPlayer).filter(s => s.oppGoals > 0)
+    .sort((a,b) => b.oppGoals - a.oppGoals);
+
+  const scorersRows = scorers.length
+    ? scorers.map(s => `<tr><td>${s.number}</td><td class="name">${escapeHtml(s.alias||s.name)}</td><td class="goals-cell">${s.goals}</td></tr>`).join('')
+    : '<tr><td colspan="3" style="color:#5b6776; padding:10px;">Sin goles registrados.</td></tr>';
+  const concedersRows = conceders.length
+    ? conceders.map(s => `<tr><td>${s.number}</td><td class="name">${escapeHtml(s.alias||s.name)}</td><td class="goals-cell">${s.oppGoals}</td></tr>`).join('')
+    : '<tr><td colspan="3" style="color:#5b6776; padding:10px;">Sin goles encajados registrados.</td></tr>';
+
+  table.innerHTML = `
+    <thead><tr><th style="text-align:left;">Métrica</th><th>Nosotros</th><th>Rival</th></tr></thead>
+    <tbody>
+      ${goalsRow}
+      ${row('Nº posesiones', us.possCount, them.possCount)}
+      ${row('Tiempo posesión', formatTime(us.possTime), formatTime(them.possTime))}
+      ${row('% posesión', usPct + '%', themPct + '%')}
+      ${row('Tiempo medio/posesión', formatTime(usAvg), formatTime(themAvg))}
+      ${row('O/G/P/F', `${us.chances}/${us.goals}/${us.chancesSaved}/${us.chancesOff}`, `${them.chances}/${them.goals}/${them.chancesSaved}/${them.chancesOff}`)}
+      ${row('Recuperaciones', us.recoveries, '—')}
+      ${row('Pérdidas', us.losses, '—')}
+      ${row('Faltas', us.fouls, them.fouls)}
+      ${row('🟨 Amarillas', us.yellows, them.yellows)}
+      ${row('🟥 Rojas', us.reds, them.reds)}
+    </tbody>
+  `;
+
+  // Two summary tables below: scorers and conceders.
+  let extra = document.getElementById('teamGoalTables');
+  if (!extra) {
+    extra = document.createElement('div');
+    extra.id = 'teamGoalTables';
+    table.closest('.panel').appendChild(extra);
   }
-  const pairStats = {}; // 'pidA|pidB' -> {pos, neg}
-  state.match.events.forEach(e => {
-    const pol = eventPolarity(e);
-    if (pol === 'neutral') return;
-    const players = e.onCourt.filter(Boolean);
-    for (let i = 0; i < players.length; i++) {
-      for (let j = i+1; j < players.length; j++) {
-        const key = [players[i], players[j]].sort().join('|');
-        if (!pairStats[key]) pairStats[key] = {pos:0, neg:0};
-        if (pol === 'pos') pairStats[key].pos++;
-        if (pol === 'neg') pairStats[key].neg++;
-      }
+  extra.style.display = '';
+  extra.innerHTML = `
+    <div class="goal-tables">
+      <div class="goal-table-block">
+        <div class="goal-table-title">⚽ Goles realizados</div>
+        <table class="stats-table">
+          <thead><tr><th>#</th><th style="text-align:left;">Jugador</th><th>Goles</th></tr></thead>
+          <tbody>${scorersRows}</tbody>
+        </table>
+      </div>
+      <div class="goal-table-block">
+        <div class="goal-table-title">🥅 Goles encajados</div>
+        <table class="stats-table">
+          <thead><tr><th>#</th><th style="text-align:left;">Jugador</th><th>G. enc.</th></tr></thead>
+          <tbody>${concedersRows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ---- POSSESSION PANEL (chart + numbers) ----
+async function renderPossessionPanel(selected) {
+  const el = document.getElementById('possessionSummary');
+  if (!el) return;
+  if (!selected || selected.length === 0) {
+    el.innerHTML = '<div style="color:#5b6776; font-size:13px;">Selecciona partidos para ver la posesión.</div>';
+    return;
+  }
+  const {us, them} = await computeTeamStats(selected);
+  const total = us.possTime + them.possTime;
+  const usPct = total ? Math.round(us.possTime/total*100) : 0;
+  const themPct = total ? 100 - usPct : 0;
+  const usAvg = us.possCount ? us.possTime/us.possCount : 0;
+  const themAvg = them.possCount ? them.possTime/them.possCount : 0;
+  if (us.possCount === 0 && them.possCount === 0) {
+    el.innerHTML = '<div style="color:#5b6776; font-size:13px;">No hay datos de posesión en los partidos seleccionados.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div class="poss-live-bar" style="height:30px; margin-bottom:12px;">
+      <div class="pf" style="width:${usPct}%">${usPct}%</div>
+      <div class="pa" style="width:${themPct}%">${themPct}%</div>
+    </div>
+    <table class="poss-summary-table">
+      <tr><th></th><th>Nosotros</th><th>Rival</th></tr>
+      <tr><td>Nº posesiones</td><td>${us.possCount}</td><td>${them.possCount}</td></tr>
+      <tr><td>Tiempo total</td><td>${formatTime(us.possTime)}</td><td>${formatTime(them.possTime)}</td></tr>
+      <tr><td>Tiempo medio/posesión</td><td>${formatTime(usAvg)}</td><td>${formatTime(themAvg)}</td></tr>
+    </table>
+  `;
+}
+
+// Top Stats view state (shares competition/venue/match/j5/calc with stats,
+// but has its own 'view': player | team(quintets)).
+const topFilters = { view: 'player' };
+
+async function renderChemistry() {
+  // Kept as the entry name used by renderAll; delegates to renderTopStats.
+  await renderTopStats();
+}
+
+async function renderTopStats() {
+  const content = document.getElementById('topStatsContent');
+  const subEl = document.getElementById('topHeaderSub');
+  if (!content) return;
+
+  const allMatches = getAllMatchesForStats();
+  const filtered = applyMatchFilters(allMatches);
+  const selected = filtered.filter(m => statsFilters.selectedMatchIds && statsFilters.selectedMatchIds.has(m.id));
+
+  if (selected.length === 0) {
+    if (subEl) subEl.textContent = 'Ningún partido seleccionado';
+    content.innerHTML = `<div class="panel"><div style="padding:20px; text-align:center; color:#5b6776;">
+      Selecciona uno o más partidos en los filtros para ver los rankings.</div></div>`;
+    return;
+  }
+
+  // Preload attendance (needed for per-match calc)
+  for (const m of selected) {
+    if (m.activity && !state.attendanceByActivity[m.activity.id]) {
+      await loadAttendanceForActivity(m.activity.id);
     }
-  });
+  }
 
-  // top positive pairs
-  const arr = Object.entries(pairStats).map(([k,v]) => {
-    const [a,b] = k.split('|');
-    const pa = getPlayer(a), pb = getPlayer(b);
-    return {a:pa, b:pb, pos:v.pos, neg:v.neg, net: v.pos - v.neg};
-  }).filter(x => x.a && x.b);
+  const j5txt = statsFilters.j5 === 'j5for' ? ' · jugando de 5'
+              : statsFilters.j5 === 'j5against' ? ' · rival de 5' : '';
+  if (subEl) subEl.textContent = `${selected.length} partido${selected.length===1?'':'s'}${j5txt}`;
 
-  const topPos = [...arr].sort((x,y) => y.pos - x.pos).slice(0,8);
-  const topNeg = [...arr].sort((x,y) => y.neg - x.neg).slice(0,8);
-  const topNet = [...arr].sort((x,y) => y.net - x.net).slice(0,8);
+  if (topFilters.view === 'team') {
+    await renderTopQuintets(selected, content);
+  } else {
+    await renderTopPlayers(selected, content);
+  }
+}
 
-  // per-quintet
+// ---- TOP PLAYERS (positive & negative ranking blocks) ----
+async function renderTopPlayers(selected, content) {
+  const calc = statsFilters.calc;
+  const {byPlayer} = await computeAggregatedStats(selected);
+  const players = Object.values(byPlayer);
+
+  // Value transform per calc mode
+  const val = (s, raw) => {
+    if (calc === 'perMatch') return s.matchesPlayed ? raw / s.matchesPlayed : 0;
+    if (calc === 'perTime') { const mins = s.minutes/60; return mins>0 ? raw/mins : 0; }
+    return raw;
+  };
+  const calcSuffix = calc === 'perMatch' ? ' / partido' : calc === 'perTime' ? ' / min' : '';
+
+  // Build a ranking block: title, accessor for the raw stat, and a color
+  function rankBlock(title, rawAccessor, color, emoji) {
+    const ranked = players
+      .map(s => ({ s, raw: rawAccessor(s), v: val(s, rawAccessor(s)) }))
+      .filter(x => x.raw > 0)
+      .sort((a, b) => b.v - a.v);
+    const rows = ranked.length
+      ? ranked.map((x, i) => `
+          <div class="top-row">
+            <span class="top-rank">${i+1}</span>
+            <span class="top-num">${x.s.number ?? '·'}</span>
+            <span class="top-name">${escapeHtml(x.s.alias || x.s.name)}</span>
+            <span class="top-val" style="color:${color};">${fmtNum(x.v) || 0}${calcSuffix}</span>
+          </div>`).join('')
+      : '<div style="color:#94a3b8; font-size:13px; padding:8px;">Sin datos.</div>';
+    return `<div class="top-card"><h4>${emoji} ${title}</h4>${rows}</div>`;
+  }
+
+  // Goalkeeper efficiency block: goals conceded per opponent chance faced.
+  // Lower is better. Only players who acted as GK (have opponent chances) appear.
+  function gkBlock() {
+    const ranked = players
+      .filter(s => s.oppChances > 0)
+      .map(s => ({ s, ratio: s.oppGoals / s.oppChances }))
+      .sort((a, b) => a.ratio - b.ratio); // lower ratio = better, on top
+    const rows = ranked.length
+      ? ranked.map((x, i) => `
+          <div class="top-row">
+            <span class="top-rank">${i+1}</span>
+            <span class="top-num">${x.s.number ?? '·'}</span>
+            <span class="top-name">${escapeHtml(x.s.alias || x.s.name)}</span>
+            <span class="top-val" style="color:#16a34a;" title="${x.s.oppGoals} goles en ${x.s.oppChances} ocasiones recibidas">${fmtNum(x.ratio)} <span style="font-weight:500; color:#94a3b8; font-size:11px;">(${x.s.oppGoals}/${x.s.oppChances})</span></span>
+          </div>`).join('')
+      : '<div style="color:#94a3b8; font-size:13px; padding:8px;">Sin datos de portero.</div>';
+    return `<div class="top-card"><h4>🧤 Mejor portero (goles/ocasión)</h4>${rows}</div>`;
+  }
+
+  content.innerHTML = `
+    <div class="top-block-label positive">Positivo</div>
+    <div class="top-grid">
+      ${rankBlock('Máximos realizadores', s => s.goals, '#16a34a', '⚽')}
+      ${rankBlock('Máximos asistentes', s => s.assistsGoal + s.assistsNoGoal, '#16a34a', '🅰️')}
+      ${rankBlock('Máximos recuperadores', s => s.recoveries, '#16a34a', '🛡️')}
+      ${gkBlock()}
+    </div>
+    <div class="top-block-label negative">Negativo</div>
+    <div class="top-grid">
+      ${rankBlock('Más pérdidas de balón', s => s.losses, '#dc2626', '❌')}
+      ${rankBlock('Más faltas', s => s.fouls, '#dc2626', '⚠️')}
+      ${rankBlock('Más tarjetas', s => s.yellows + s.reds, '#dc2626', '🟨')}
+      ${rankBlock('Más goles encajados (culpa)', s => s.gaBlame, '#dc2626', '🥅')}
+    </div>
+  `;
+}
+
+// ---- TOP QUINTETS (which 5-on-court combos produced most) ----
+async function renderTopQuintets(selected, content) {
+  // Aggregate events by the exact quintet on court (5 players, sorted ids).
   const quintetStats = {};
-  state.match.events.forEach(e => {
-    const pol = eventPolarity(e);
-    if (pol === 'neutral') return;
-    const ids = [...e.onCourt].filter(Boolean).sort();
-    if (ids.length !== 5) return;
-    const key = ids.join('|');
-    if (!quintetStats[key]) quintetStats[key] = {pos:0, neg:0, events:0};
-    quintetStats[key].events++;
-    if (pol === 'pos') quintetStats[key].pos++;
-    if (pol === 'neg') quintetStats[key].neg++;
-  });
+  for (const m of selected) {
+    const data = await loadMatchData(m.id, m.isActive);
+    for (const e of data.events) {
+      if (!eventMatchesJ5(e)) continue;
+      const ids = [...(e.onCourt || [])].filter(Boolean).sort();
+      if (ids.length !== 5) continue;
+      const key = ids.join('|');
+      if (!quintetStats[key]) quintetStats[key] = {goals:0, chances:0, recoveries:0, losses:0, oppGoals:0, oppChances:0, events:0};
+      const q = quintetStats[key];
+      q.events++;
+      if (e.type === 'chance') { q.chances++; if (e.result === 'gol') q.goals++; }
+      else if (e.type === 'recovery') q.recoveries++;
+      else if (e.type === 'loss') q.losses++;
+      else if (e.type === 'opp_chance') { q.oppChances++; if (e.result === 'gol') q.oppGoals++; }
+    }
+  }
   const quintets = Object.entries(quintetStats).map(([k,v]) => ({
-    players: k.split('|').map(getPlayer).filter(Boolean),
-    pos: v.pos, neg: v.neg, net: v.pos - v.neg, events: v.events,
-  })).sort((x,y) => y.net - x.net).slice(0,6);
+    players: k.split('|').map(getPlayer).filter(Boolean), ...v
+  }));
 
-  const grid = document.getElementById('chemGrid');
-  grid.innerHTML = '';
-
-  function card(title, rows, fmt) {
-    const c = document.createElement('div');
-    c.className = 'chem-card';
-    c.innerHTML = `<h4>${title}</h4>` + (rows.length === 0 ? '<div style="color:#64748b; font-size:13px;">Sin datos</div>' : rows.map(fmt).join(''));
-    return c;
+  if (quintets.length === 0) {
+    content.innerHTML = `<div class="panel"><div style="padding:20px; text-align:center; color:#5b6776;">
+      No hay datos de quintetos. Necesitas tener 5 jugadores en pista cuando ocurren las acciones.</div></div>`;
+    return;
   }
 
-  grid.appendChild(card('🔥 Mejores parejas (eventos positivos)',
-    topPos.filter(x => x.pos > 0),
-    x => `<div class="chem-row"><span>${escapeHtml(displayName(x.a))} + ${escapeHtml(displayName(x.b))}</span><span class="chem-val" style="color:#4ade80;">+${x.pos}</span></div>`));
+  function quintetCard(title, statKey, color, emoji, isNeg) {
+    const ranked = [...quintets].filter(q => q[statKey] > 0).sort((a,b) => b[statKey] - a[statKey]);
+    const rows = ranked.length
+      ? ranked.map((q,i) => `
+          <div class="top-row quintet">
+            <span class="top-rank">${i+1}</span>
+            <span class="quintet-players">${q.players.map(p => escapeHtml(p.alias || p.name)).join(' · ')}</span>
+            <span class="top-val" style="color:${color};">${q[statKey]}</span>
+          </div>`).join('')
+      : '<div style="color:#94a3b8; font-size:13px; padding:8px;">Sin datos.</div>';
+    return `<div class="top-card"><h4>${emoji} ${title}</h4>${rows}</div>`;
+  }
 
-  grid.appendChild(card('⚠️ Parejas con más eventos negativos',
-    topNeg.filter(x => x.neg > 0),
-    x => `<div class="chem-row"><span>${escapeHtml(displayName(x.a))} + ${escapeHtml(displayName(x.b))}</span><span class="chem-val" style="color:#f87171;">-${x.neg}</span></div>`));
-
-  grid.appendChild(card('⚖️ Balance neto (pos − neg)',
-    topNet,
-    x => `<div class="chem-row"><span>${escapeHtml(displayName(x.a))} + ${escapeHtml(displayName(x.b))}</span><span class="chem-val" style="color:${x.net>=0?'#4ade80':'#f87171'};">${x.net>=0?'+':''}${x.net}</span></div>`));
-
-  grid.appendChild(card('🏆 Mejores quintetos',
-    quintets,
-    x => `<div class="chem-row"><span style="font-size:12px;">${x.players.map(p=>escapeHtml(displayName(p))).join(', ')}</span><span class="chem-val">${x.pos}/${x.neg} (${x.events} ev)</span></div>`));
+  content.innerHTML = `
+    <div class="top-block-label positive">Positivo</div>
+    <div class="top-grid">
+      ${quintetCard('Quinteto · más goles', 'goals', '#16a34a', '⚽')}
+      ${quintetCard('Quinteto · más ocasiones', 'chances', '#16a34a', '🎯')}
+      ${quintetCard('Quinteto · más recuperaciones', 'recoveries', '#16a34a', '🛡️')}
+    </div>
+    <div class="top-block-label negative">Negativo</div>
+    <div class="top-grid">
+      ${quintetCard('Quinteto · más goles recibidos', 'oppGoals', '#dc2626', '🥅')}
+      ${quintetCard('Quinteto · más ocasiones recibidas', 'oppChances', '#dc2626', '🆚')}
+      ${quintetCard('Quinteto · más pérdidas', 'losses', '#dc2626', '❌')}
+    </div>
+  `;
 }
 
 function renderHistory() {
@@ -5029,18 +5617,10 @@ document.getElementById('endPeriodBtn').addEventListener('click', () => {
 
 // Juego de 5 toggle (manual override — e.g. when GK joins the attack)
 // Juego de 5 toggles (independent: ours / theirs)
-document.getElementById('juego5ForBtn').addEventListener('click', async () => {
-  state.match.juego5For = !state.match.juego5For;
-  await saveCurrentMatch();
-  renderClock();
-});
-document.getElementById('juego5AgainstBtn').addEventListener('click', async () => {
-  state.match.juego5Against = !state.match.juego5Against;
-  await saveCurrentMatch();
-  renderClock();
-});
+document.getElementById('juego5ForBtn').addEventListener('click', () => setJuego5('for'));
+document.getElementById('juego5AgainstBtn').addEventListener('click', () => setJuego5('against'));
 
-// Possession counters (simple +1 per tap)
+// Possession counters (each tap = new possession event)
 document.getElementById('possForBtn').addEventListener('click', () => switchPossession('for'));
 document.getElementById('possAgainstBtn').addEventListener('click', () => switchPossession('against'));
 
@@ -5173,14 +5753,23 @@ function goToView(viewId) {
   }
   // Refresh the match view when entering it (bench/court reflect latest state)
   if (target === 'match') {
-    renderCourtSlots();
-    renderBench();
-    renderMatchActivityBanner();
+    renderMatchViewMode();
+    if (state.match) {
+      renderCourtSlots();
+      renderBench();
+      renderMatchActivityBanner();
+    }
   }
   // Refresh stats when entering — match selection and filters may need updating
   if (target === 'stats') {
     renderStatsFilters();
     renderStats();
+  }
+  // Top Stats: ensure a default selection and render
+  if (target === 'chem') {
+    initStatsSelectionIfNeeded();
+    renderTopFilters();
+    renderTopStats();
   }
 }
 
@@ -5197,9 +5786,30 @@ document.getElementById('sidebarToggle').addEventListener('click', () => {
 });
 
 // ===== Stats filters bindings =====
+// When competition/venue changes, re-sync the selection so the visible matches
+// are shown. If we were in "all" mode (or the selection is empty), select all
+// currently-visible matches. Otherwise keep the intersection with what's visible.
+function resyncSelectionToFilters() {
+  const visible = applyMatchFilters(getAllMatchesForStats());
+  const visibleIds = new Set(visible.map(m => m.id));
+  if (statsFilters.matchSelMode === 'all' || !statsFilters.selectedMatchIds || statsFilters.selectedMatchIds.size === 0) {
+    statsFilters.selectedMatchIds = new Set(visibleIds);
+    statsFilters.matchSelMode = 'all';
+  } else {
+    // keep only those still visible
+    statsFilters.selectedMatchIds = new Set([...statsFilters.selectedMatchIds].filter(id => visibleIds.has(id)));
+    // if that emptied it, fall back to all visible
+    if (statsFilters.selectedMatchIds.size === 0) {
+      statsFilters.selectedMatchIds = new Set(visibleIds);
+      statsFilters.matchSelMode = 'all';
+    }
+  }
+}
+
 document.querySelectorAll('#filterCompetition .filter-chip').forEach(c => {
   c.addEventListener('click', () => {
     statsFilters.competition = c.dataset.comp || '';
+    resyncSelectionToFilters();
     renderStatsFilters();
     renderStats();
   });
@@ -5207,6 +5817,7 @@ document.querySelectorAll('#filterCompetition .filter-chip').forEach(c => {
 document.querySelectorAll('#filterVenue .filter-chip').forEach(c => {
   c.addEventListener('click', () => {
     statsFilters.venue = c.dataset.venue || '';
+    resyncSelectionToFilters();
     renderStatsFilters();
     renderStats();
   });
@@ -5214,11 +5825,13 @@ document.querySelectorAll('#filterVenue .filter-chip').forEach(c => {
 document.getElementById('selectAllMatches').addEventListener('click', () => {
   const filtered = applyMatchFilters(getAllMatchesForStats());
   statsFilters.selectedMatchIds = new Set(filtered.map(m => m.id));
+  statsFilters.matchSelMode = 'all';
   renderStatsFilters();
   renderStats();
 });
 document.getElementById('selectNoneMatches').addEventListener('click', () => {
   statsFilters.selectedMatchIds = new Set();
+  statsFilters.matchSelMode = 'none';
   renderStatsFilters();
   renderStats();
 });
@@ -5227,8 +5840,117 @@ document.getElementById('selectActiveMatch').addEventListener('click', () => {
   if (state.match && state.match.id) {
     statsFilters.selectedMatchIds.add(state.match.id);
   }
+  statsFilters.matchSelMode = 'active';
   renderStatsFilters();
   renderStats();
+});
+// Situación (J5)
+document.querySelectorAll('#filterJuego5 .filter-chip').forEach(c => {
+  c.addEventListener('click', () => {
+    statsFilters.j5 = c.dataset.j5 || 'all';
+    renderStatsFilters();
+    renderStats();
+  });
+});
+// Cálculo (Totales / Por partido / Por minuto)
+document.querySelectorAll('#filterCalc .filter-chip').forEach(c => {
+  c.addEventListener('click', () => {
+    statsFilters.calc = c.dataset.calc || 'total';
+    renderStatsFilters();
+    renderStats();
+  });
+});
+// Vista (Jugador / Equipo)
+document.querySelectorAll('#filterView .filter-chip').forEach(c => {
+  c.addEventListener('click', () => {
+    statsFilters.view = c.dataset.statview || 'player';
+    renderStatsFilters();
+    renderStats();
+  });
+});
+// Toggle the match picker dropdown
+document.getElementById('toggleMatchPicker').addEventListener('click', () => {
+  const picker = document.getElementById('matchPicker');
+  picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
+});
+
+// ===== Top Stats filters bindings (share statsFilters) =====
+function renderTopFilters() {
+  document.querySelectorAll('#topFilterCompetition .filter-chip').forEach(c =>
+    c.classList.toggle('active', (c.dataset.comp||'') === statsFilters.competition));
+  document.querySelectorAll('#topFilterVenue .filter-chip').forEach(c =>
+    c.classList.toggle('active', (c.dataset.venue||'') === statsFilters.venue));
+  document.querySelectorAll('#topFilterJuego5 .filter-chip').forEach(c =>
+    c.classList.toggle('active', (c.dataset.j5||'all') === statsFilters.j5));
+  document.querySelectorAll('#topFilterCalc .filter-chip').forEach(c =>
+    c.classList.toggle('active', (c.dataset.calc||'total') === statsFilters.calc));
+  document.querySelectorAll('#topFilterView .filter-chip').forEach(c =>
+    c.classList.toggle('active', (c.dataset.topview||'player') === topFilters.view));
+  document.getElementById('topSelectAll').classList.toggle('active', statsFilters.matchSelMode === 'all');
+  document.getElementById('topSelectNone').classList.toggle('active', statsFilters.matchSelMode === 'none');
+  document.getElementById('topSelectActive').classList.toggle('active', statsFilters.matchSelMode === 'active');
+  // Match summary text
+  const n = statsFilters.selectedMatchIds?.size || 0;
+  const summ = document.getElementById('topMatchSummary');
+  if (summ) summ.textContent = n === 0 ? 'ninguno' : (n === 1 ? '1 partido' : `${n} partidos`);
+  // Build the dropdown picker (reuse the same item style)
+  const picker = document.getElementById('topMatchPicker');
+  if (picker) {
+    const filtered = applyMatchFilters(getAllMatchesForStats());
+    picker.innerHTML = '';
+    filtered.forEach(m => {
+      const checked = statsFilters.selectedMatchIds?.has(m.id);
+      const dateStr = (m.date||'').slice(0,10);
+      const opp = m.opponent ? 'vs ' + escapeHtml(m.opponent) : '(sin rival)';
+      const row = document.createElement('label');
+      row.className = 'match-picker-item';
+      row.innerHTML = `<input type="checkbox" data-mid="${m.id}" ${checked?'checked':''}>
+        <div class="mp-info"><div class="mp-date">${dateStr} · ${opp} ${m.isActive?'<span class="mp-active-badge">activo</span>':''}</div></div>`;
+      picker.appendChild(row);
+    });
+    picker.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('change', e => {
+        const mid = e.target.dataset.mid;
+        if (e.target.checked) statsFilters.selectedMatchIds.add(mid);
+        else statsFilters.selectedMatchIds.delete(mid);
+        statsFilters.matchSelMode = null;
+        renderTopFilters();
+        renderTopStats();
+      });
+    });
+  }
+}
+
+document.querySelectorAll('#topFilterCompetition .filter-chip').forEach(c => {
+  c.addEventListener('click', () => { statsFilters.competition = c.dataset.comp||''; resyncSelectionToFilters(); renderTopFilters(); renderTopStats(); renderStatsFilters(); });
+});
+document.querySelectorAll('#topFilterVenue .filter-chip').forEach(c => {
+  c.addEventListener('click', () => { statsFilters.venue = c.dataset.venue||''; resyncSelectionToFilters(); renderTopFilters(); renderTopStats(); renderStatsFilters(); });
+});
+document.querySelectorAll('#topFilterJuego5 .filter-chip').forEach(c => {
+  c.addEventListener('click', () => { statsFilters.j5 = c.dataset.j5||'all'; renderTopFilters(); renderTopStats(); });
+});
+document.querySelectorAll('#topFilterCalc .filter-chip').forEach(c => {
+  c.addEventListener('click', () => { statsFilters.calc = c.dataset.calc||'total'; renderTopFilters(); renderTopStats(); });
+});
+document.querySelectorAll('#topFilterView .filter-chip').forEach(c => {
+  c.addEventListener('click', () => { topFilters.view = c.dataset.topview||'player'; renderTopFilters(); renderTopStats(); });
+});
+document.getElementById('topSelectAll').addEventListener('click', () => {
+  statsFilters.selectedMatchIds = new Set(applyMatchFilters(getAllMatchesForStats()).map(m=>m.id));
+  statsFilters.matchSelMode = 'all'; renderTopFilters(); renderTopStats();
+});
+document.getElementById('topSelectNone').addEventListener('click', () => {
+  statsFilters.selectedMatchIds = new Set(); statsFilters.matchSelMode = 'none'; renderTopFilters(); renderTopStats();
+});
+document.getElementById('topSelectActive').addEventListener('click', () => {
+  statsFilters.selectedMatchIds = new Set();
+  if (state.match && state.match.id) statsFilters.selectedMatchIds.add(state.match.id);
+  statsFilters.matchSelMode = 'active'; renderTopFilters(); renderTopStats();
+});
+document.getElementById('topToggleMatchPicker').addEventListener('click', () => {
+  const p = document.getElementById('topMatchPicker');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
 });
 
 // Subtabs inside Attendance
