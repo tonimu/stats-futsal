@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Fondo redondeado (Windows/Android lo enmascaran; el "maskable" pide safe zone) -->
+  <rect x="0" y="0" width="512" height="512" rx="80" fill="#1e293b"/>
+  <!-- Pelota de futsal estilizada -->
+  <circle cx="256" cy="200" r="88" fill="#ffffff"/>
+  <path d="M 256 130 L 232 155 L 214 200 L 232 245 L 256 270 L 280 245 L 298 200 L 280 155 Z" fill="#1e293b" opacity="0.15"/>
+  <path d="M 256 130 L 256 270 M 190 200 L 322 200" stroke="#1e293b" stroke-width="4" opacity="0.4"/>
+  <!-- Texto: STATS -->
+  <text x="256" y="380" text-anchor="middle" font-family="Arial, sans-serif" font-weight="900" font-size="72" fill="#ffffff">STATS</text>
+  <text x="256" y="450" text-anchor="middle" font-family="Arial, sans-serif" font-weight="600" font-size="36" fill="#94a3b8">FUTSAL</text>
+</svg>
