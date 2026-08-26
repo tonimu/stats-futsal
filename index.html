@@ -1765,6 +1765,8 @@
                 <button class="action-btn small card-red" id="cardRedBtn"><span class="action-icon">🟥</span><span class="action-label">Roja</span></button>
               </div>
               <button class="action-btn" data-type="foul"><span class="action-icon">⚠️</span><span class="action-label">Falta</span></button>
+              <!-- Row 4: Duelos -->
+              <button class="action-btn" id="duelBtn" style="grid-column: 1 / -1; border-color:#8b5cf6;"><span class="action-icon">⚔️</span><span class="action-label">Duelos</span></button>
             </div>
           </div>
 
@@ -2148,6 +2150,38 @@
   </div>
 </div>
 
+<!-- ===== DUEL PICKER MODAL ===== -->
+<div class="modal-backdrop" id="duelModal" style="display:none;">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-title">
+      <span>⚔️ Duelo</span>
+      <button class="btn btn-ghost" id="closeDuelModal">✕</button>
+    </div>
+    <!-- Step 1: choose duel kind -->
+    <div id="duelStepKind">
+      <div style="font-size:12px; color:#5b6776; margin-bottom:10px;">1. Elige el tipo de duelo:</div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <button class="btn" data-duelkind="duel_off_won" style="background:#dcfce7; color:#15803d; border:2px solid #16a34a; padding:16px; font-weight:700;">💪 Ofensivo<br>GANADO</button>
+        <button class="btn" data-duelkind="duel_off_lost" style="background:#fee2e2; color:#b91c1c; border:2px solid #dc2626; padding:16px; font-weight:700;">💪 Ofensivo<br>PERDIDO</button>
+        <button class="btn" data-duelkind="duel_def_won" style="background:#dcfce7; color:#15803d; border:2px solid #16a34a; padding:16px; font-weight:700;">🛡️ Defensivo<br>GANADO</button>
+        <button class="btn" data-duelkind="duel_def_lost" style="background:#fee2e2; color:#b91c1c; border:2px solid #dc2626; padding:16px; font-weight:700;">🛡️ Defensivo<br>PERDIDO</button>
+      </div>
+    </div>
+    <!-- Step 2: choose player -->
+    <div id="duelStepPlayer" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div style="font-size:12px; color:#5b6776;">2. Elige el jugador:</div>
+        <button class="btn btn-ghost btn-tiny" id="duelBackBtn">← Cambiar tipo</button>
+      </div>
+      <div id="duelKindLabel" style="padding:8px 12px; background:#f1f5f9; border-radius:6px; font-weight:600; margin-bottom:10px; font-size:14px;"></div>
+      <div class="card-section-label">En pista</div>
+      <div id="duelCourtList" class="card-person-grid"></div>
+      <div class="card-section-label">Banquillo</div>
+      <div id="duelBenchList" class="card-person-grid"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== RESULT PICKER MODAL (chance result) ===== -->
 <div class="modal-backdrop" id="resultModal" style="display:none;">
   <div class="modal" style="max-width:480px;">
@@ -2181,11 +2215,10 @@
     </div>
     <!-- Time-check banner: only shown for substitutions, hidden for actions -->
     <div id="subTimeBanner" style="display:none; background:#f1f5f9; border:1px solid #dde3ea; border-radius:10px; padding:12px; margin-bottom:14px;">
-      <div style="font-size:12px; color:#5b6776; margin-bottom:6px; font-weight:600;">⏱ TIEMPO DEL CAMBIO (mira el marcador)</div>
+      <div style="font-size:12px; color:#5b6776; margin-bottom:6px; font-weight:600;">⏱ TIEMPO DEL CAMBIO (mira el marcador · toca el tiempo para corregirlo)</div>
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-        <div id="subTimeDisplay" style="font-size:32px; font-weight:700; font-variant-numeric:tabular-nums; color:#4ade80; letter-spacing:2px; min-width:110px;">20:00</div>
+        <div id="subTimeDisplay" style="font-size:32px; font-weight:700; font-variant-numeric:tabular-nums; color:#4ade80; letter-spacing:2px; min-width:110px; cursor:pointer; text-decoration:underline dotted; text-decoration-color:#94a3b8;" title="Tocar para corregir el tiempo">20:00</div>
         <button class="btn btn-ghost btn-tiny" id="subTimeOkBtn" style="background:#16a34a; color:white;">✓ Coincide</button>
-        <button class="btn btn-ghost btn-tiny" id="subTimeCorrectBtn">✎ Corregir</button>
         <div style="margin-left:auto; font-size:11px; color:#5b6776;">Se actualizará el reloj y se registrará el cambio en este tiempo</div>
       </div>
     </div>
@@ -2234,7 +2267,7 @@
     <div class="modal-title">Editar acción</div>
     <div style="padding: 8px 4px 4px; display: flex; flex-direction: column; gap: 12px;">
 
-      <div>
+      <div id="editEvtTypeRow">
         <label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">Tipo de acción</label>
         <select id="editEvtType" class="form-input" style="width:100%;">
           <option value="chance">⚽ Ocasión nuestra</option>
@@ -2248,6 +2281,10 @@
           <option value="ga_blame">🥅 Gol encajado (culpa)</option>
           <option value="opp_chance">🆚 Ocasión rival</option>
           <option value="opp_foul">🆚 Falta rival</option>
+          <option value="duel_off_won">💪 Duelo ofensivo ganado</option>
+          <option value="duel_off_lost">💪 Duelo ofensivo perdido</option>
+          <option value="duel_def_won">🛡️ Duelo defensivo ganado</option>
+          <option value="duel_def_lost">🛡️ Duelo defensivo perdido</option>
         </select>
       </div>
 
@@ -2265,7 +2302,7 @@
         </div>
       </div>
 
-      <div style="display:flex; gap:8px;">
+      <div id="editEvtTimeRow" style="display:flex; gap:8px;">
         <div style="flex:1;">
           <label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">Parte</label>
           <select id="editEvtPeriod" class="form-input" style="width:100%;">
@@ -2283,7 +2320,7 @@
         </div>
       </div>
 
-      <div style="display:flex; gap:8px; align-items:end;">
+      <div id="editEvtVideoRow" style="display:flex; gap:8px; align-items:end;">
         <div style="flex:1;">
           <label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">🎥 Vídeo min</label>
           <input type="number" id="editEvtVideoMin" class="form-input" min="0" max="99" style="width:100%;" placeholder="—">
@@ -2293,6 +2330,21 @@
           <input type="number" id="editEvtVideoSec" class="form-input" min="0" max="59" style="width:100%;" placeholder="—">
         </div>
         <div style="flex:1; font-size:11px; color:#5b6776; padding-bottom:8px;">Tiempo en la grabación (opcional)</div>
+      </div>
+
+      <!-- Only shown when editing a substitution -->
+      <div id="editEvtSubTimeRow" style="display:none;">
+        <label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">Tiempo del cambio</label>
+        <div style="display:flex; gap:8px;">
+          <div style="flex:1;">
+            <label style="display:block; font-size:10px; color:#94a3b8; margin-bottom:2px;">Minuto</label>
+            <input type="number" id="editSubMin" class="form-input" min="0" max="59" style="width:100%;">
+          </div>
+          <div style="flex:1;">
+            <label style="display:block; font-size:10px; color:#94a3b8; margin-bottom:2px;">Segundo</label>
+            <input type="number" id="editSubSec" class="form-input" min="0" max="59" style="width:100%;">
+          </div>
+        </div>
       </div>
 
       <div id="editEvtHint" style="font-size:11px; color:#5b6776;"></div>
@@ -3104,13 +3156,19 @@ function setRemainingTime(remainingSec) {
 function toggleTimer() {
   const t = state.match.timer;
   if (t.running) {
-    // pause
+    // Pause the match clock. The video stopwatch keeps running (the camera does too).
     t.periodSeconds += (Date.now() - t.startedAt) / 1000;
     t.running = false;
     t.startedAt = null;
   } else {
+    // Start (or resume) the match clock. If this is the first Play of the period
+    // (video stopwatch idle at 00:00), start the video stopwatch too so we don't
+    // have to remember pressing its ▶.
     t.running = true;
     t.startedAt = Date.now();
+    if (typeof window.startVideoStopwatchIfIdle === 'function') {
+      window.startVideoStopwatchIfIdle();
+    }
   }
   renderClock();
   saveState();
@@ -3141,7 +3199,7 @@ function endPeriod() {
     if (typeof window.resetVideoStopwatchForNewPeriod === 'function') {
       window.resetVideoStopwatchForNewPeriod();
     }
-    alert('Fin 1ª parte. Empieza 2ª parte (pulsa Play cuando estés listo).\n\nEl cronómetro de vídeo se ha reseteado a 00:00. Dale al ▶ cuando arranques a grabar la 2ª parte.');
+    alert('Fin 1ª parte. Empieza 2ª parte (pulsa Play cuando estés listo).\n\nEl cronómetro de vídeo se ha reseteado a 00:00 y arrancará solo cuando le des al Play de la 2ª parte.');
   } else {
     alert('Partido terminado. Recuerda guardarlo en el historial.');
   }
@@ -3417,6 +3475,10 @@ function actionLabel(type) {
     opp_save: 'Parada de nuestro portero', opp_miss: 'Ocasión rival fallada',
     opp_foul: 'Falta del rival',
     ga_blame: 'Gol encajado (culpa)',
+    duel_off_won: '💪 Duelo ofensivo ganado',
+    duel_off_lost: '💪 Duelo ofensivo perdido',
+    duel_def_won: '🛡️ Duelo defensivo ganado',
+    duel_def_lost: '🛡️ Duelo defensivo perdido',
   };
   return labels[type] || type;
 }
@@ -3811,6 +3873,80 @@ function closeCardModal() {
   document.getElementById('cardModal').style.display = 'none';
 }
 
+// ---- DUEL MODAL ----
+let duelSelectedKind = null; // 'duel_off_won' | 'duel_off_lost' | 'duel_def_won' | 'duel_def_lost'
+
+const DUEL_KIND_LABEL = {
+  duel_off_won:  '💪 Duelo ofensivo GANADO',
+  duel_off_lost: '💪 Duelo ofensivo PERDIDO',
+  duel_def_won:  '🛡️ Duelo defensivo GANADO',
+  duel_def_lost: '🛡️ Duelo defensivo PERDIDO',
+};
+
+function openDuelModal() {
+  duelSelectedKind = null;
+  document.getElementById('duelStepKind').style.display = '';
+  document.getElementById('duelStepPlayer').style.display = 'none';
+  document.getElementById('duelModal').style.display = 'flex';
+}
+
+function closeDuelModal() {
+  document.getElementById('duelModal').style.display = 'none';
+  duelSelectedKind = null;
+}
+
+function goToDuelPlayerStep(kind) {
+  duelSelectedKind = kind;
+  document.getElementById('duelKindLabel').textContent = DUEL_KIND_LABEL[kind] || kind;
+  // Fill player lists (on court + bench, no staff — duels are player-only)
+  const onCourtIds = state.match.onCourt.filter(Boolean);
+  const expelled = new Set(state.match.expelledPlayers);
+  const courtHtml = onCourtIds.map(pid => {
+    const p = getPlayer(pid); if (!p) return '';
+    return `<button class="card-person" data-duelplayer="${p.id}">
+      <span class="cp-num">${p.number ?? '·'}</span>${escapeHtml(displayName(p))}
+    </button>`;
+  }).join('') || '<div style="color:#94a3b8; font-size:12px;">Nadie en pista.</div>';
+  document.getElementById('duelCourtList').innerHTML = courtHtml;
+
+  const benchPlayers = state.roster.filter(p =>
+    !onCourtIds.includes(p.id) && !expelled.has(p.id)
+  );
+  const benchHtml = benchPlayers.map(p =>
+    `<button class="card-person" data-duelplayer="${p.id}">
+      <span class="cp-num">${p.number ?? '·'}</span>${escapeHtml(displayName(p))}
+    </button>`).join('') || '<div style="color:#94a3b8; font-size:12px;">Sin suplentes.</div>';
+  document.getElementById('duelBenchList').innerHTML = benchHtml;
+
+  // Wire player buttons
+  document.querySelectorAll('#duelCourtList [data-duelplayer], #duelBenchList [data-duelplayer]').forEach(b => {
+    b.addEventListener('click', () => logDuel(duelSelectedKind, b.dataset.duelplayer));
+  });
+
+  document.getElementById('duelStepKind').style.display = 'none';
+  document.getElementById('duelStepPlayer').style.display = '';
+}
+
+async function logDuel(kind, playerId) {
+  if (!kind || !playerId) return;
+  const evt = {
+    id: 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+    matchId: state.match.id,
+    type: kind, // e.g. 'duel_off_won'
+    playerId,
+    time: currentMatchSeconds(),
+    period: state.match.timer.period,
+    onCourt: [...state.match.onCourt],
+    juego5For: !!state.match.juego5For,
+    juego5Against: !!state.match.juego5Against,
+  };
+  state.match.events.push(evt);
+  await saveEvent(evt);
+  await saveCurrentMatch();
+  closeDuelModal();
+  renderAll();
+}
+
 function personCardChip(p, context) {
   const yellows = playerYellowCount(p.id);
   const cls = yellows > 0 ? ' has-yellow' : '';
@@ -3895,9 +4031,9 @@ let editingEventId = null;
 let editingResult = null; // 'gol' | 'parada' | 'fuera' | null
 
 // Which event types are choose-able in the editor
-const EDITABLE_TYPES = ['chance','assist_goal','assist_nogoal','recovery','loss','foul','yellow','red','ga_blame','opp_chance','opp_foul'];
+const EDITABLE_TYPES = ['chance','assist_goal','assist_nogoal','recovery','loss','foul','yellow','red','ga_blame','opp_chance','opp_foul','duel_off_won','duel_off_lost','duel_def_won','duel_def_lost'];
 // Which types need a player selection
-const TYPES_WITH_PLAYER = new Set(['chance','assist_goal','assist_nogoal','recovery','loss','foul','yellow','red','ga_blame','opp_chance']);
+const TYPES_WITH_PLAYER = new Set(['chance','assist_goal','assist_nogoal','recovery','loss','foul','yellow','red','ga_blame','opp_chance','duel_off_won','duel_off_lost','duel_def_won','duel_def_lost']);
 // Which types need a result (gol/parada/fuera)
 const TYPES_WITH_RESULT = new Set(['chance','opp_chance']);
 
@@ -3932,6 +4068,9 @@ function openEventEditor(eventId) {
   const ss = Math.floor((evt.time || 0) % 60);
   document.getElementById('editEvtMin').value = mm;
   document.getElementById('editEvtSec').value = ss;
+  // Also fill the sub-specific time inputs
+  document.getElementById('editSubMin').value = mm;
+  document.getElementById('editSubSec').value = ss;
 
   // Video time (optional)
   if (typeof evt.videoTime === 'number') {
@@ -3952,6 +4091,13 @@ function updateEventEditorUI() {
   const type = document.getElementById('editEvtType').value;
   const playerRow = document.getElementById('editEvtPlayerRow');
 
+  // In sub mode: hide type, player, result, generic time and video rows.
+  // Show only a fixed "who ↔ who" label and the sub-specific time inputs.
+  document.getElementById('editEvtTypeRow').style.display = isSub ? 'none' : '';
+  document.getElementById('editEvtTimeRow').style.display = isSub ? 'none' : 'flex';
+  document.getElementById('editEvtVideoRow').style.display = isSub ? 'none' : 'flex';
+  document.getElementById('editEvtSubTimeRow').style.display = isSub ? '' : 'none';
+
   if (isSub) {
     const pIn = evt.playerId ? getPlayer(evt.playerId) : null;
     const pOut = evt.playerOutId ? getPlayer(evt.playerOutId) : null;
@@ -3959,7 +4105,7 @@ function updateEventEditorUI() {
     playerRow.innerHTML =
       `<label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">Cambio</label>
        <div style="padding:8px 10px; background:#f1f5f9; border-radius:6px; font-size:13px;">${label}</div>
-       <div style="font-size:11px; color:#5b6776; margin-top:4px;">Solo puedes ajustar el tiempo. Los minutos de los jugadores se recalcularán al guardar.</div>`;
+       <div style="font-size:11px; color:#5b6776; margin-top:4px;">Solo puedes ajustar el tiempo. Si el cambio está mal, elimínalo con ↩ y haz uno nuevo.</div>`;
     playerRow.style.display = '';
     document.getElementById('editEvtResultRow').style.display = 'none';
     document.getElementById('editEvtHint').textContent = '';
@@ -4030,10 +4176,10 @@ async function saveEventEdit() {
   }
 
   if (isSub) {
-    evt.time = newTime;
-    evt.period = newPeriod;
-    if (newVideoTime === null) delete evt.videoTime;
-    else evt.videoTime = newVideoTime;
+    // For a substitution: only the time is editable. Period and videoTime stay.
+    const smm = Math.max(0, Math.min(59, parseInt(document.getElementById('editSubMin').value, 10) || 0));
+    const sss = Math.max(0, Math.min(59, parseInt(document.getElementById('editSubSec').value, 10) || 0));
+    evt.time = smm * 60 + sss;
     await saveEvent(evt);
     await recomputePlayerMinutesFromSubs();
     await saveCurrentMatch();
@@ -6306,6 +6452,20 @@ document.getElementById('closeCardModal').addEventListener('click', closeCardMod
 document.getElementById('cardModal').addEventListener('click', e => {
   if (e.target.id === 'cardModal') closeCardModal();
 });
+
+// Duels button → open the duel picker (kind first, then player)
+document.getElementById('duelBtn').addEventListener('click', openDuelModal);
+document.getElementById('closeDuelModal').addEventListener('click', closeDuelModal);
+document.getElementById('duelModal').addEventListener('click', e => {
+  if (e.target.id === 'duelModal') closeDuelModal();
+});
+document.querySelectorAll('#duelStepKind [data-duelkind]').forEach(b => {
+  b.addEventListener('click', () => goToDuelPlayerStep(b.dataset.duelkind));
+});
+document.getElementById('duelBackBtn').addEventListener('click', () => {
+  document.getElementById('duelStepPlayer').style.display = 'none';
+  document.getElementById('duelStepKind').style.display = '';
+});
 // Delegate clicks on person chips
 ['cardCourtList','cardBenchList','cardStaffList'].forEach(id => {
   document.getElementById(id).addEventListener('click', async (e) => {
@@ -6328,7 +6488,7 @@ document.getElementById('subTimeOkBtn').addEventListener('click', () => {
     setTimeout(() => { disp.style.transform = 'scale(1)'; }, 150);
   }
 });
-document.getElementById('subTimeCorrectBtn').addEventListener('click', () => {
+document.getElementById('subTimeDisplay').addEventListener('click', () => {
   // Open the keypad in sync mode; when confirmed it will update the main clock,
   // and updateSubTimeBanner() will refresh the banner display.
   openKeypad({kind: 'sync', afterConfirm: updateSubTimeBanner});
@@ -7124,6 +7284,19 @@ setInterval(() => {
     // Reset to zero (do not auto-restart — user hits ▶ when the video is ready)
     swAccumMs = 0;
     tick();
+  };
+
+  // Start the stopwatch automatically when the match clock starts, but ONLY
+  // if it's currently idle (at 00:00 and not running). If the user has already
+  // started/paused/adjusted it manually, we leave it alone.
+  window.startVideoStopwatchIfIdle = function() {
+    if (swStartedAt) return; // already running
+    if (swAccumMs !== 0) return; // has some accumulated time already; user handles it
+    // Same logic as manual toggle() when going from stopped to started
+    swStartedAt = Date.now();
+    swInterval = setInterval(tick, 250);
+    const btn = document.getElementById('videoSwToggle');
+    if (btn) { btn.textContent = '⏸'; btn.style.background = '#f97316'; }
   };
 
   // Expose so other code can trigger visibility check on view change
