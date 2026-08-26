@@ -860,6 +860,16 @@
     border-radius: 4px;
     font-size: 11px;
   }
+  .event-edit {
+    background: #dbeafe;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    border: none;
+    cursor: pointer;
+    margin-right: 4px;
+  }
+  .event-edit:hover { background: #93c5fd; }
 
   /* ===== MODAL ===== */
   .modal-backdrop {
@@ -2204,6 +2214,71 @@
     <div style="display:flex; gap:8px; margin-top:12px;">
       <button class="keypad-btn cancel" id="keypadCancel" style="flex:1;">Cancelar</button>
       <button class="keypad-btn confirm" id="keypadConfirm" style="flex:2;">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== EVENT EDITOR MODAL ===== -->
+<div class="modal-backdrop" id="eventEditorModal" style="display:none;">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-title">Editar acción</div>
+    <div style="padding: 8px 4px 4px; display: flex; flex-direction: column; gap: 12px;">
+
+      <div>
+        <label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">Tipo de acción</label>
+        <select id="editEvtType" class="form-input" style="width:100%;">
+          <option value="chance">⚽ Ocasión nuestra</option>
+          <option value="assist_goal">🅰️ Asistencia (gol)</option>
+          <option value="assist_nogoal">🅰️ Asistencia sin gol</option>
+          <option value="recovery">🛡️ Recuperación</option>
+          <option value="loss">❌ Pérdida</option>
+          <option value="foul">⚠️ Falta</option>
+          <option value="yellow">🟨 Amarilla</option>
+          <option value="red">🟥 Roja</option>
+          <option value="ga_blame">🥅 Gol encajado (culpa)</option>
+          <option value="opp_chance">🆚 Ocasión rival</option>
+          <option value="opp_foul">🆚 Falta rival</option>
+        </select>
+      </div>
+
+      <div id="editEvtPlayerRow">
+        <label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">Jugador</label>
+        <select id="editEvtPlayer" class="form-input" style="width:100%;"></select>
+      </div>
+
+      <div id="editEvtResultRow" style="display:none;">
+        <label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">Resultado</label>
+        <div style="display:flex; gap:6px;">
+          <button class="filter-chip" data-editres="gol" style="flex:1;">⚽ Gol</button>
+          <button class="filter-chip" data-editres="parada" style="flex:1;">🧤 Parada</button>
+          <button class="filter-chip" data-editres="fuera" style="flex:1;">❌ Fuera</button>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:8px;">
+        <div style="flex:1;">
+          <label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">Parte</label>
+          <select id="editEvtPeriod" class="form-input" style="width:100%;">
+            <option value="1">1ª parte</option>
+            <option value="2">2ª parte</option>
+          </select>
+        </div>
+        <div style="flex:1;">
+          <label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">Minuto</label>
+          <input type="number" id="editEvtMin" class="form-input" min="0" max="59" style="width:100%;">
+        </div>
+        <div style="flex:1;">
+          <label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">Segundo</label>
+          <input type="number" id="editEvtSec" class="form-input" min="0" max="59" style="width:100%;">
+        </div>
+      </div>
+
+      <div id="editEvtHint" style="font-size:11px; color:#5b6776;"></div>
+
+      <div style="display:flex; gap:8px; margin-top:6px;">
+        <button class="btn btn-ghost" id="editEvtCancel" style="flex:1;">Cancelar</button>
+        <button class="btn btn-primary" id="editEvtSave" style="flex:2;">Guardar cambios</button>
+      </div>
     </div>
   </div>
 </div>
@@ -3780,6 +3855,136 @@ async function undoEvent(eventId) {
   renderAll();
 }
 
+// ---- Event editor (edit any field of an existing event) ----
+let editingEventId = null;
+let editingResult = null; // 'gol' | 'parada' | 'fuera' | null
+
+// Which event types are choose-able in the editor
+const EDITABLE_TYPES = ['chance','assist_goal','assist_nogoal','recovery','loss','foul','yellow','red','ga_blame','opp_chance','opp_foul'];
+// Which types need a player selection
+const TYPES_WITH_PLAYER = new Set(['chance','assist_goal','assist_nogoal','recovery','loss','foul','yellow','red','ga_blame','opp_chance']);
+// Which types need a result (gol/parada/fuera)
+const TYPES_WITH_RESULT = new Set(['chance','opp_chance']);
+
+function openEventEditor(eventId) {
+  const evt = state.match.events.find(e => e.id === eventId);
+  if (!evt) return;
+  // Some types are not editable via this dialog (sub, possession — too intertwined)
+  if (evt.type === 'sub') {
+    alert('Los cambios (sustituciones) no se pueden editar aquí. Deshaz el cambio y haz uno nuevo.');
+    return;
+  }
+  if (evt.type === 'possession') {
+    alert('Las posesiones no se pueden editar aquí. Deshaz y vuelve a marcar posesión.');
+    return;
+  }
+  editingEventId = eventId;
+  editingResult = evt.result || null;
+
+  // Fill selects
+  const typeSel = document.getElementById('editEvtType');
+  typeSel.value = EDITABLE_TYPES.includes(evt.type) ? evt.type : 'chance';
+
+  // Player select — build from roster
+  const playerSel = document.getElementById('editEvtPlayer');
+  playerSel.innerHTML = '<option value="">— (ninguno) —</option>' + state.roster.map(p =>
+    `<option value="${p.id}" ${p.id === evt.playerId ? 'selected' : ''}>#${p.number || '·'} ${escapeHtml(p.alias || p.name)}</option>`
+  ).join('');
+
+  document.getElementById('editEvtPeriod').value = String(evt.period || 1);
+  const mm = Math.floor((evt.time || 0) / 60);
+  const ss = Math.floor((evt.time || 0) % 60);
+  document.getElementById('editEvtMin').value = mm;
+  document.getElementById('editEvtSec').value = ss;
+
+  updateEventEditorUI();
+  document.getElementById('eventEditorModal').style.display = 'flex';
+}
+
+function updateEventEditorUI() {
+  const type = document.getElementById('editEvtType').value;
+  document.getElementById('editEvtPlayerRow').style.display = TYPES_WITH_PLAYER.has(type) ? '' : 'none';
+  document.getElementById('editEvtResultRow').style.display = TYPES_WITH_RESULT.has(type) ? '' : 'none';
+
+  // Highlight the active result chip
+  document.querySelectorAll('#editEvtResultRow .filter-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.editres === editingResult);
+  });
+
+  // Hint about score effects
+  const evt = state.match.events.find(e => e.id === editingEventId);
+  const hint = document.getElementById('editEvtHint');
+  let hintTxt = '';
+  if (evt) {
+    const wasGoalFor = evt.type === 'chance' && evt.result === 'gol';
+    const wasGoalAg = evt.type === 'opp_chance' && evt.result === 'gol';
+    const willBeGoalFor = type === 'chance' && editingResult === 'gol';
+    const willBeGoalAg = type === 'opp_chance' && editingResult === 'gol';
+    const dF = (willBeGoalFor ? 1 : 0) - (wasGoalFor ? 1 : 0);
+    const dA = (willBeGoalAg ? 1 : 0) - (wasGoalAg ? 1 : 0);
+    if (dF !== 0 || dA !== 0) {
+      const parts = [];
+      if (dF > 0) parts.push('+1 gol nuestro');
+      if (dF < 0) parts.push('−1 gol nuestro');
+      if (dA > 0) parts.push('+1 gol rival');
+      if (dA < 0) parts.push('−1 gol rival');
+      hintTxt = 'El marcador cambiará: ' + parts.join(', ');
+    }
+  }
+  hint.textContent = hintTxt;
+}
+
+async function saveEventEdit() {
+  const evt = state.match.events.find(e => e.id === editingEventId);
+  if (!evt) { closeEventEditor(); return; }
+
+  const newType = document.getElementById('editEvtType').value;
+  const newPlayerId = TYPES_WITH_PLAYER.has(newType) ? (document.getElementById('editEvtPlayer').value || null) : null;
+  const newPeriod = parseInt(document.getElementById('editEvtPeriod').value, 10) || 1;
+  const mm = Math.max(0, Math.min(59, parseInt(document.getElementById('editEvtMin').value, 10) || 0));
+  const ss = Math.max(0, Math.min(59, parseInt(document.getElementById('editEvtSec').value, 10) || 0));
+  const newTime = mm * 60 + ss;
+  const newResult = TYPES_WITH_RESULT.has(newType) ? editingResult : null;
+
+  // Validate result required for chance / opp_chance
+  if (TYPES_WITH_RESULT.has(newType) && !newResult) {
+    alert('Selecciona un resultado (Gol / Parada / Fuera).');
+    return;
+  }
+
+  // Compute score deltas: was this a goal? will this be a goal?
+  const wasGoalFor = evt.type === 'chance' && evt.result === 'gol';
+  const wasGoalAg = evt.type === 'opp_chance' && evt.result === 'gol';
+  const willBeGoalFor = newType === 'chance' && newResult === 'gol';
+  const willBeGoalAg = newType === 'opp_chance' && newResult === 'gol';
+  const dF = (willBeGoalFor ? 1 : 0) - (wasGoalFor ? 1 : 0);
+  const dA = (willBeGoalAg ? 1 : 0) - (wasGoalAg ? 1 : 0);
+
+  // Apply changes
+  evt.type = newType;
+  evt.playerId = newPlayerId;
+  evt.time = newTime;
+  evt.period = newPeriod;
+  if (TYPES_WITH_RESULT.has(newType)) evt.result = newResult;
+  else delete evt.result;
+
+  state.match.scoreFor = Math.max(0, state.match.scoreFor + dF);
+  state.match.scoreAgainst = Math.max(0, state.match.scoreAgainst + dA);
+
+  await saveEvent(evt);
+  await saveCurrentMatch();
+  closeEventEditor();
+  renderAll();
+}
+
+function closeEventEditor() {
+  editingEventId = null;
+  editingResult = null;
+  document.getElementById('eventEditorModal').style.display = 'none';
+}
+
+
+
 // ============================================================
 // RENDER
 // ============================================================
@@ -4073,7 +4278,8 @@ function buildEventRow(evt) {
     <span class="event-time" data-evt-time="${evt.id}" style="cursor:pointer; text-decoration:underline dotted; text-decoration-color:#cbd5e1;" title="Tocar para corregir el tiempo">${periodLabel} ${formatCountdown(evt.time)}</span>
     <span class="event-type">${label} ${j5mark}</span>
     <span class="event-player">${player ? escapeHtml(displayName(player)) : ''}</span>
-    <button class="event-undo" data-id="${evt.id}">↩</button>
+    <button class="event-edit" data-id="${evt.id}" title="Editar">✏️</button>
+    <button class="event-undo" data-id="${evt.id}" title="Deshacer">↩</button>
   `;
   return div;
 }
@@ -4083,6 +4289,11 @@ function bindEventRows(container) {
     el.addEventListener('click', e => {
       const eventId = e.currentTarget.dataset.evtTime;
       openEditEventTime(eventId);
+    });
+  });
+  container.querySelectorAll('.event-edit').forEach(b => {
+    b.addEventListener('click', e => {
+      openEventEditor(e.currentTarget.dataset.id);
     });
   });
   container.querySelectorAll('.event-undo').forEach(b => {
@@ -5836,6 +6047,21 @@ async function renderMonthlyReport() {
 document.getElementById('playPauseBtn').addEventListener('click', toggleTimer);
 document.getElementById('endPeriodBtn').addEventListener('click', () => {
   if (confirm('¿Finalizar parte actual?')) endPeriod();
+});
+
+// Event editor modal bindings
+document.getElementById('editEvtType').addEventListener('change', updateEventEditorUI);
+document.querySelectorAll('#editEvtResultRow .filter-chip').forEach(c => {
+  c.addEventListener('click', () => {
+    editingResult = c.dataset.editres;
+    updateEventEditorUI();
+  });
+});
+document.getElementById('editEvtSave').addEventListener('click', saveEventEdit);
+document.getElementById('editEvtCancel').addEventListener('click', closeEventEditor);
+// Backdrop click closes
+document.getElementById('eventEditorModal').addEventListener('click', (e) => {
+  if (e.target.id === 'eventEditorModal') closeEventEditor();
 });
 
 // Juego de 5 toggle (manual override — e.g. when GK joins the attack)
