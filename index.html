@@ -870,6 +870,16 @@
     margin-right: 4px;
   }
   .event-edit:hover { background: #93c5fd; }
+  .event-videotime {
+    background: #1e293b;
+    color: #f8fafc;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-family: 'Archivo', monospace;
+    font-variant-numeric: tabular-nums;
+    margin-left: 4px;
+  }
 
   /* ===== MODAL ===== */
   .modal-backdrop {
@@ -2273,6 +2283,18 @@
         </div>
       </div>
 
+      <div style="display:flex; gap:8px; align-items:end;">
+        <div style="flex:1;">
+          <label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">🎥 Vídeo min</label>
+          <input type="number" id="editEvtVideoMin" class="form-input" min="0" max="99" style="width:100%;" placeholder="—">
+        </div>
+        <div style="flex:1;">
+          <label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">🎥 Vídeo seg</label>
+          <input type="number" id="editEvtVideoSec" class="form-input" min="0" max="59" style="width:100%;" placeholder="—">
+        </div>
+        <div style="flex:1; font-size:11px; color:#5b6776; padding-bottom:8px;">Tiempo en la grabación (opcional)</div>
+      </div>
+
       <div id="editEvtHint" style="font-size:11px; color:#5b6776;"></div>
 
       <div style="display:flex; gap:8px; margin-top:6px;">
@@ -2313,6 +2335,8 @@ let state = {
   attendanceByActivity: {}, // {activityId: [{...attendance record}]} — loaded on demand
   lastExportAt: null,    // timestamp of last backup export (for the reminder)
 };
+// Expose state on window so auxiliary scripts (like the video stopwatch) can read it
+window.state = state;
 
 function createNewMatch() {
   return {
@@ -2502,6 +2526,13 @@ async function savePlayer(p) {
 }
 
 async function saveEvent(evt) {
+  // Auto-attach the current video-stopwatch time if the event doesn't have one yet.
+  // We only attach it for match events that are recorded live (i.e. no videoTime
+  // already set). For historical edits or replays we leave the existing value.
+  if (evt && evt.videoTime === undefined && typeof window.getVideoStopwatchSeconds === 'function') {
+    const vt = window.getVideoStopwatchSeconds();
+    if (vt != null) evt.videoTime = vt;
+  }
   return dbPut('events', evt);
 }
 
@@ -3106,7 +3137,11 @@ function endPeriod() {
         state.match.subs[pid].periodIn = 0;
       }
     });
-    alert('Fin 1ª parte. Empieza 2ª parte (pulsa Play cuando estés listo).');
+    // Reset the video stopwatch so 2nd-half events are timed from 00:00 again
+    if (typeof window.resetVideoStopwatchForNewPeriod === 'function') {
+      window.resetVideoStopwatchForNewPeriod();
+    }
+    alert('Fin 1ª parte. Empieza 2ª parte (pulsa Play cuando estés listo).\n\nEl cronómetro de vídeo se ha reseteado a 00:00. Dale al ▶ cuando arranques a grabar la 2ª parte.');
   } else {
     alert('Partido terminado. Recuerda guardarlo en el historial.');
   }
@@ -3869,23 +3904,24 @@ const TYPES_WITH_RESULT = new Set(['chance','opp_chance']);
 function openEventEditor(eventId) {
   const evt = state.match.events.find(e => e.id === eventId);
   if (!evt) return;
-  // Some types are not editable via this dialog (sub, possession — too intertwined)
-  if (evt.type === 'sub') {
-    alert('Los cambios (sustituciones) no se pueden editar aquí. Deshaz el cambio y haz uno nuevo.');
-    return;
-  }
   if (evt.type === 'possession') {
     alert('Las posesiones no se pueden editar aquí. Deshaz y vuelve a marcar posesión.');
     return;
   }
   editingEventId = eventId;
   editingResult = evt.result || null;
+  const isSub = evt.type === 'sub';
 
-  // Fill selects
   const typeSel = document.getElementById('editEvtType');
   typeSel.value = EDITABLE_TYPES.includes(evt.type) ? evt.type : 'chance';
+  typeSel.disabled = isSub;
 
-  // Player select — build from roster
+  // Reset the player row to a clean <select> before updateEventEditorUI decides
+  // whether to keep it or replace it (subs replace it with a read-only label).
+  const playerRow = document.getElementById('editEvtPlayerRow');
+  playerRow.innerHTML =
+    `<label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">Jugador</label>
+     <select id="editEvtPlayer" class="form-input" style="width:100%;"></select>`;
   const playerSel = document.getElementById('editEvtPlayer');
   playerSel.innerHTML = '<option value="">— (ninguno) —</option>' + state.roster.map(p =>
     `<option value="${p.id}" ${p.id === evt.playerId ? 'selected' : ''}>#${p.number || '·'} ${escapeHtml(p.alias || p.name)}</option>`
@@ -3897,13 +3933,51 @@ function openEventEditor(eventId) {
   document.getElementById('editEvtMin').value = mm;
   document.getElementById('editEvtSec').value = ss;
 
+  // Video time (optional)
+  if (typeof evt.videoTime === 'number') {
+    document.getElementById('editEvtVideoMin').value = Math.floor(evt.videoTime / 60);
+    document.getElementById('editEvtVideoSec').value = Math.floor(evt.videoTime % 60);
+  } else {
+    document.getElementById('editEvtVideoMin').value = '';
+    document.getElementById('editEvtVideoSec').value = '';
+  }
+
   updateEventEditorUI();
   document.getElementById('eventEditorModal').style.display = 'flex';
 }
 
 function updateEventEditorUI() {
+  const evt = state.match.events.find(e => e.id === editingEventId);
+  const isSub = evt && evt.type === 'sub';
   const type = document.getElementById('editEvtType').value;
-  document.getElementById('editEvtPlayerRow').style.display = TYPES_WITH_PLAYER.has(type) ? '' : 'none';
+  const playerRow = document.getElementById('editEvtPlayerRow');
+
+  if (isSub) {
+    const pIn = evt.playerId ? getPlayer(evt.playerId) : null;
+    const pOut = evt.playerOutId ? getPlayer(evt.playerOutId) : null;
+    const label = `🔄 ${pOut ? escapeHtml(displayName(pOut)) : '(hueco)'} → ${pIn ? escapeHtml(displayName(pIn)) : '(hueco)'}`;
+    playerRow.innerHTML =
+      `<label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">Cambio</label>
+       <div style="padding:8px 10px; background:#f1f5f9; border-radius:6px; font-size:13px;">${label}</div>
+       <div style="font-size:11px; color:#5b6776; margin-top:4px;">Solo puedes ajustar el tiempo. Los minutos de los jugadores se recalcularán al guardar.</div>`;
+    playerRow.style.display = '';
+    document.getElementById('editEvtResultRow').style.display = 'none';
+    document.getElementById('editEvtHint').textContent = '';
+    return;
+  }
+
+  // Restore the normal player <select> if it was overwritten by a previous sub edit
+  if (!document.getElementById('editEvtPlayer')) {
+    playerRow.innerHTML =
+      `<label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">Jugador</label>
+       <select id="editEvtPlayer" class="form-input" style="width:100%;"></select>`;
+    const sel = document.getElementById('editEvtPlayer');
+    sel.innerHTML = '<option value="">— (ninguno) —</option>' + state.roster.map(p =>
+      `<option value="${p.id}" ${p.id === evt.playerId ? 'selected' : ''}>#${p.number || '·'} ${escapeHtml(p.alias || p.name)}</option>`
+    ).join('');
+  }
+
+  playerRow.style.display = TYPES_WITH_PLAYER.has(type) ? '' : 'none';
   document.getElementById('editEvtResultRow').style.display = TYPES_WITH_RESULT.has(type) ? '' : 'none';
 
   // Highlight the active result chip
@@ -3912,7 +3986,6 @@ function updateEventEditorUI() {
   });
 
   // Hint about score effects
-  const evt = state.match.events.find(e => e.id === editingEventId);
   const hint = document.getElementById('editEvtHint');
   let hintTxt = '';
   if (evt) {
@@ -3937,22 +4010,47 @@ function updateEventEditorUI() {
 async function saveEventEdit() {
   const evt = state.match.events.find(e => e.id === editingEventId);
   if (!evt) { closeEventEditor(); return; }
+  const isSub = evt.type === 'sub';
 
-  const newType = document.getElementById('editEvtType').value;
-  const newPlayerId = TYPES_WITH_PLAYER.has(newType) ? (document.getElementById('editEvtPlayer').value || null) : null;
   const newPeriod = parseInt(document.getElementById('editEvtPeriod').value, 10) || 1;
   const mm = Math.max(0, Math.min(59, parseInt(document.getElementById('editEvtMin').value, 10) || 0));
   const ss = Math.max(0, Math.min(59, parseInt(document.getElementById('editEvtSec').value, 10) || 0));
   const newTime = mm * 60 + ss;
+
+  // Read video time (both fields optional; if both empty → clear videoTime)
+  const vmRaw = document.getElementById('editEvtVideoMin').value;
+  const vsRaw = document.getElementById('editEvtVideoSec').value;
+  let newVideoTime; // undefined = don't change; null = remove; number = set
+  if (vmRaw === '' && vsRaw === '') {
+    newVideoTime = null;
+  } else {
+    const vm = Math.max(0, Math.min(99, parseInt(vmRaw, 10) || 0));
+    const vs = Math.max(0, Math.min(59, parseInt(vsRaw, 10) || 0));
+    newVideoTime = vm * 60 + vs;
+  }
+
+  if (isSub) {
+    evt.time = newTime;
+    evt.period = newPeriod;
+    if (newVideoTime === null) delete evt.videoTime;
+    else evt.videoTime = newVideoTime;
+    await saveEvent(evt);
+    await recomputePlayerMinutesFromSubs();
+    await saveCurrentMatch();
+    closeEventEditor();
+    renderAll();
+    return;
+  }
+
+  const newType = document.getElementById('editEvtType').value;
+  const newPlayerId = TYPES_WITH_PLAYER.has(newType) ? (document.getElementById('editEvtPlayer').value || null) : null;
   const newResult = TYPES_WITH_RESULT.has(newType) ? editingResult : null;
 
-  // Validate result required for chance / opp_chance
   if (TYPES_WITH_RESULT.has(newType) && !newResult) {
     alert('Selecciona un resultado (Gol / Parada / Fuera).');
     return;
   }
 
-  // Compute score deltas: was this a goal? will this be a goal?
   const wasGoalFor = evt.type === 'chance' && evt.result === 'gol';
   const wasGoalAg = evt.type === 'opp_chance' && evt.result === 'gol';
   const willBeGoalFor = newType === 'chance' && newResult === 'gol';
@@ -3960,13 +4058,14 @@ async function saveEventEdit() {
   const dF = (willBeGoalFor ? 1 : 0) - (wasGoalFor ? 1 : 0);
   const dA = (willBeGoalAg ? 1 : 0) - (wasGoalAg ? 1 : 0);
 
-  // Apply changes
   evt.type = newType;
   evt.playerId = newPlayerId;
   evt.time = newTime;
   evt.period = newPeriod;
   if (TYPES_WITH_RESULT.has(newType)) evt.result = newResult;
   else delete evt.result;
+  if (newVideoTime === null) delete evt.videoTime;
+  else evt.videoTime = newVideoTime;
 
   state.match.scoreFor = Math.max(0, state.match.scoreFor + dF);
   state.match.scoreAgainst = Math.max(0, state.match.scoreAgainst + dA);
@@ -3975,6 +4074,102 @@ async function saveEventEdit() {
   await saveCurrentMatch();
   closeEventEditor();
   renderAll();
+}
+
+// Recompute minutes played for every player, by replaying substitution events
+// from scratch. Called when a sub's time is edited manually.
+// Algorithm:
+//   For each player, collect their sub events (as in/out entries per period),
+//   plus the initial on-court state (period-start = "in") and the current end
+//   (period-end or current time = "out" if still on court). Then sum durations.
+async function recomputePlayerMinutesFromSubs() {
+  const m = state.match;
+  if (!m) return;
+  const subEvts = m.events.filter(e => e.type === 'sub').sort((a,b) => (a.period - b.period) || (a.time - b.time));
+
+  // Reset all subs totals
+  for (const pid of Object.keys(m.subs)) {
+    m.subs[pid].totalSeconds = 0;
+    m.subs[pid].history = [];
+  }
+
+  // Track who is on court per period, starting from the initial roster.
+  // NOTE: we assume the initial onCourt (state.match.onCourt as it was at match start)
+  // is preserved in the current onCourt if no subs happened before period 1 start.
+  // For the recompute we walk sub events in order across periods.
+  // For each period, we need to know who WAS on court at the start.
+  // Simplification: we take state.match.onCourt at time=0 as the initial 5, and
+  // we replay subs from there for both periods (assuming period 2 starts with
+  // whoever was on court at the end of period 1 — that's true unless the user
+  // did halftime changes without registering them; if so, they need to edit
+  // manually).
+
+  // Get initial on-court from the earliest known state — best effort: use the
+  // first sub event's onCourt snapshot as the state RIGHT AFTER that sub, so
+  // subtract the sub itself; if no subs exist, use current onCourt.
+  let onCourt;
+  const firstSub = subEvts[0];
+  if (firstSub) {
+    onCourt = [...(firstSub.onCourt || m.onCourt)];
+    // Undo the first sub to get pre-sub state
+    if (firstSub.slot != null) {
+      onCourt[firstSub.slot] = firstSub.playerOutId || null;
+    }
+  } else {
+    onCourt = [...m.onCourt];
+  }
+
+  // Open "in" entries for the initial 5 at t=0, period 1
+  onCourt.forEach(pid => {
+    if (pid && m.subs[pid]) m.subs[pid].history.push({in: 0, period: 1});
+  });
+
+  // Replay subs
+  for (const s of subEvts) {
+    const slot = s.slot;
+    if (slot == null) continue;
+    const outPid = onCourt[slot];
+    if (outPid && m.subs[outPid]) {
+      m.subs[outPid].history.push({out: s.time, period: s.period});
+    }
+    const inPid = s.playerId;
+    if (inPid) {
+      if (!m.subs[inPid]) m.subs[inPid] = {totalSeconds: 0, periodIn: null, history: []};
+      m.subs[inPid].history.push({in: s.time, period: s.period});
+    }
+    onCourt[slot] = inPid || null;
+  }
+
+  // Close open "in" entries at period end (or current time if it's the live period)
+  const PL = matchPeriodLength();
+  onCourt.forEach(pid => {
+    if (pid && m.subs[pid]) m.subs[pid].history.push({out: PL, period: m.timer.period});
+  });
+
+  // Sum durations per player from consecutive in/out pairs
+  for (const pid of Object.keys(m.subs)) {
+    const h = m.subs[pid].history;
+    let total = 0;
+    let openIn = null;
+    let openPeriod = null;
+    for (const entry of h) {
+      if ('in' in entry) {
+        openIn = entry.in;
+        openPeriod = entry.period;
+      } else if ('out' in entry && openIn != null && entry.period === openPeriod) {
+        total += Math.max(0, entry.out - openIn);
+        openIn = null;
+      }
+    }
+    m.subs[pid].totalSeconds = total;
+    // periodIn/periodOut left null — we'll recompute live values normally
+    m.subs[pid].periodIn = null;
+  }
+
+  // Persist all subs
+  for (const [pid, data] of Object.entries(m.subs)) {
+    await saveSubRecord(m.id, pid, data);
+  }
 }
 
 function closeEventEditor() {
@@ -4274,8 +4469,18 @@ function buildEventRow(evt) {
   if (evt.juego5For) j5mark = '<span class="j5-mark for" title="Jugando de 5 a favor">5⚡</span>';
   else if (evt.juego5Against) j5mark = '<span class="j5-mark against" title="Defendiendo contra 5">5🛡️</span>';
 
+  // Video-stopwatch time (if the event was recorded while the aux stopwatch was running)
+  let videoMark = '';
+  if (typeof evt.videoTime === 'number') {
+    const vm = Math.floor(evt.videoTime / 60);
+    const vs = Math.floor(evt.videoTime % 60);
+    const vt = String(vm).padStart(2,'0') + ':' + String(vs).padStart(2,'0');
+    videoMark = `<span class="event-videotime" title="Tiempo del cronómetro de vídeo">🎥 ${vt}</span>`;
+  }
+
   div.innerHTML = `
     <span class="event-time" data-evt-time="${evt.id}" style="cursor:pointer; text-decoration:underline dotted; text-decoration-color:#cbd5e1;" title="Tocar para corregir el tiempo">${periodLabel} ${formatCountdown(evt.time)}</span>
+    ${videoMark}
     <span class="event-type">${label} ${j5mark}</span>
     <span class="event-player">${player ? escapeHtml(displayName(player)) : ''}</span>
     <button class="event-edit" data-id="${evt.id}" title="Editar">✏️</button>
@@ -6815,6 +7020,118 @@ setInterval(() => {
   if (monthEl) monthEl.value = isoMonth;
 
   renderAll();
+})();
+</script>
+
+<!-- Auxiliary "video reference" stopwatch — visible in the match view only.
+     Counts up freely; independent from the official match clock.
+     Useful to locate moments in the video recording. -->
+<div id="videoStopwatch" style="display:none; position:fixed; bottom:12px; right:12px; z-index:1000; background:#1e293b; color:#fff; border-radius:10px; padding:8px 12px; box-shadow:0 4px 12px rgba(0,0,0,0.3); font-family:'Archivo', monospace; user-select:none;">
+  <div style="font-size:9px; text-transform:uppercase; color:#94a3b8; letter-spacing:0.08em; margin-bottom:2px;">🎥 Vídeo</div>
+  <div id="videoStopwatchDisplay" style="font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1;">00:00</div>
+  <div style="display:flex; gap:4px; margin-top:6px;">
+    <button id="videoSwToggle" style="background:#22c55e; color:#fff; border:none; padding:3px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:600;">▶</button>
+    <button id="videoSwReset" style="background:#475569; color:#fff; border:none; padding:3px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:600;">↺</button>
+    <button id="videoSwHide" style="background:#475569; color:#fff; border:none; padding:3px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:600;">✕</button>
+  </div>
+</div>
+<script>
+// ============================================================
+// AUXILIARY VIDEO STOPWATCH
+// ============================================================
+// A simple free-running stopwatch, independent from the match clock.
+// State is kept in memory (not saved). Only visible in the match view.
+(function() {
+  let swStartedAt = null;   // ms timestamp when it was last started
+  let swAccumMs = 0;        // accumulated ms while paused
+  let swInterval = null;
+  let swHidden = false;     // user manually hid it this session
+
+  function fmt(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const ss = String(totalSec % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  }
+  function currentMs() {
+    return swAccumMs + (swStartedAt ? (Date.now() - swStartedAt) : 0);
+  }
+  function tick() {
+    const el = document.getElementById('videoStopwatchDisplay');
+    if (el) el.textContent = fmt(currentMs());
+  }
+  function toggle() {
+    if (swStartedAt) {
+      // Pause
+      swAccumMs += Date.now() - swStartedAt;
+      swStartedAt = null;
+      clearInterval(swInterval); swInterval = null;
+      document.getElementById('videoSwToggle').textContent = '▶';
+      document.getElementById('videoSwToggle').style.background = '#22c55e';
+    } else {
+      // Start
+      swStartedAt = Date.now();
+      swInterval = setInterval(tick, 250);
+      document.getElementById('videoSwToggle').textContent = '⏸';
+      document.getElementById('videoSwToggle').style.background = '#f97316';
+    }
+  }
+  function reset() {
+    if (swStartedAt) { swStartedAt = Date.now(); }
+    swAccumMs = 0;
+    tick();
+  }
+  function hide() {
+    swHidden = true;
+    document.getElementById('videoStopwatch').style.display = 'none';
+  }
+
+  // Show/hide based on current view
+  function updateVisibility() {
+    if (swHidden) return;
+    const view = document.getElementById('view-match');
+    const isMatch = view && view.classList.contains('active');
+    // Only show when in match view AND there's an active match
+    const hasActive = window.state && window.state.match;
+    document.getElementById('videoStopwatch').style.display = (isMatch && hasActive) ? '' : 'none';
+  }
+
+  // Wire up when DOM is ready (scripts above have already run)
+  document.getElementById('videoSwToggle').addEventListener('click', toggle);
+  document.getElementById('videoSwReset').addEventListener('click', () => {
+    if (!confirm('¿Poner el cronómetro de vídeo a 00:00?')) return;
+    reset();
+  });
+  document.getElementById('videoSwHide').addEventListener('click', hide);
+
+  // Exposed for other code:
+  //   getVideoStopwatchSeconds() → current seconds (integer), or null if never started.
+  //   resetVideoStopwatchForNewPeriod() → pauses and resets to 00:00 (called by endPeriod).
+  window.getVideoStopwatchSeconds = function() {
+    // Return null if the stopwatch hasn't been used at all this session.
+    if (swAccumMs === 0 && !swStartedAt) return null;
+    return Math.floor(currentMs() / 1000);
+  };
+  window.resetVideoStopwatchForNewPeriod = function() {
+    // Pause if running
+    if (swStartedAt) {
+      swAccumMs += Date.now() - swStartedAt;
+      swStartedAt = null;
+      clearInterval(swInterval); swInterval = null;
+      const btn = document.getElementById('videoSwToggle');
+      if (btn) { btn.textContent = '▶'; btn.style.background = '#22c55e'; }
+    }
+    // Reset to zero (do not auto-restart — user hits ▶ when the video is ready)
+    swAccumMs = 0;
+    tick();
+  };
+
+  // Expose so other code can trigger visibility check on view change
+  window.updateVideoStopwatchVisibility = updateVisibility;
+  // Also do an initial check + periodic light one (in case view changes not intercepted)
+  updateVisibility();
+  setInterval(updateVisibility, 1000);
+  tick();
 })();
 </script>
 </body>
