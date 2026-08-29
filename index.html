@@ -4682,6 +4682,18 @@ function renderPlayerGrid() {
   const expelled = new Set(state.match.expelledPlayers || []);
   players = players.filter(p => !expelled.has(p.id));
 
+  // For substitutions: only players who ATTENDED the match are eligible.
+  // Attended = attendance record with asistencia === true (includes "tarde",
+  // which is asistencia=true + puntualidad=false).
+  // If there's no attendance data for the linked activity, fall back to the
+  // full roster (avoid blocking the user when data is missing).
+  if (pickerMode?.kind === 'sub-in') {
+    const attendedIds = getConvokedPlayerIds(); // returns null if no data
+    if (attendedIds && attendedIds.size > 0) {
+      players = players.filter(p => attendedIds.has(p.id));
+    }
+  }
+
   if (pickerMode?.kind === 'sub-in') {
     if (pickerMode.slot === 0 && !pickerMode.gkOutfield) {
       // only goalkeepers for the GK slot (unless we're explicitly putting an outfield player as GK)
@@ -5873,6 +5885,11 @@ function getMostRecentMatchActivity() {
 
 // Returns the set of player IDs convoked (= "Asiste Sí" or "Tarde") for that activity.
 // If no activity exists, returns null → fall back to "all roster".
+// Returns the set of player IDs who ATTENDED the current match's linked activity.
+// "Attended" = attendance record with asistencia === true (includes "tarde",
+// which is asistencia=true + puntualidad=false — they still showed up).
+// Note: the name is legacy — despite "Convoked", this actually returns attendees,
+// which is what "who can play" means during a live match.
 function getConvokedPlayerIds() {
   const act = getMostRecentMatchActivity();
   if (!act) return null;
