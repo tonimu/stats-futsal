@@ -1449,7 +1449,7 @@
   }
   .att-row {
     display: grid;
-    grid-template-columns: 30px 1fr auto auto auto;
+    grid-template-columns: 30px 1fr auto auto auto auto;
     gap: 10px;
     align-items: center;
     padding: 8px 4px;
@@ -1471,6 +1471,24 @@
   .att-toggle.yes-active { background: #16a34a; color: #fff; border-color: #16a34a; }
   .att-toggle.no-active  { background: #dc2626; color: #fff; border-color: #dc2626; }
   .att-toggle.late-active { background: #f59e0b; color: #f1f5f9; border-color: #f59e0b; }
+  .att-convocado {
+    padding: 6px 10px;
+    background: #ffffff;
+    border: 1px solid #dde3ea;
+    border-radius: 6px;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 72px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .att-convocado.active {
+    background: #2563eb;
+    color: #fff;
+    border-color: #2563eb;
+  }
+  .att-convocado-placeholder { min-width: 72px; }
   .att-motive-select, .att-obs-input {
     background: #ffffff;
     border: 1px solid #dde3ea;
@@ -2775,6 +2793,7 @@ function blankAttendanceRecord(activityId, personId, personType) {
     personType, // 'player' | 'staff'
     asistencia: null,    // null = pending, true = sí, false = no
     puntualidad: null,   // null = pending, true = sí, false = no
+    convocado: true,     // players in a Partido: called up by default; only relevant for players in matches
     motivoAusencia: null,
     observaciones: '',
   };
@@ -4718,7 +4737,13 @@ function renderRoster() {
   const countHeader = document.getElementById('rosterCountHeader');
   if (countHeader) countHeader.textContent = state.roster.length;
 
-  state.roster.sort((a,b) => a.number - b.number).forEach(p => {
+  // Sort by shirt number ascending (players with no number go last)
+  const sorted = [...state.roster].sort((a, b) => {
+    const na = a.number != null ? Number(a.number) : 999;
+    const nb = b.number != null ? Number(b.number) : 999;
+    return na - nb;
+  });
+  sorted.forEach(p => {
     ensurePlayerShape(p);
     const div = document.createElement('div');
     div.className = 'roster-item';
@@ -4910,14 +4935,27 @@ function eventMatchesJ5(e) {
 // Convoked = the player attended (asistencia === true). This includes players
 // who arrived late, since "tarde" is a punctuality flag but they still attended.
 // A player absent due to injury/suspension (asistencia false/null) does NOT count.
+// Returns the set of convoked player IDs for a match (used to compute PC = "Partidos Convocado").
+// Priority:
+//   1) If any record has an explicit `convocado` flag set → use that flag (true = convoked).
+//   2) Otherwise (older records without the field) → fall back to `asistencia === true`.
+// This keeps old imported data working while letting new records use the explicit flag.
 function convokedIdsForMatch(m) {
   const act = m.activity;
   if (!act) return null;
   const recs = state.attendanceByActivity[act.id];
   if (!recs || recs.length === 0) return null;
+  const hasExplicitFlag = recs.some(r => r.personType === 'player' && typeof r.convocado === 'boolean');
   const ids = new Set();
   recs.forEach(r => {
-    if (r.personType === 'player' && r.asistencia === true) ids.add(r.personId);
+    if (r.personType !== 'player') return;
+    if (hasExplicitFlag) {
+      // Use the new field; default true (called up) if a specific record has no value
+      if (r.convocado !== false) ids.add(r.personId);
+    } else {
+      // Legacy fallback
+      if (r.asistencia === true) ids.add(r.personId);
+    }
   });
   return ids;
 }
@@ -6212,6 +6250,9 @@ function renderAttendanceBody() {
   body.querySelectorAll('[data-att-obs]').forEach(inp => {
     inp.addEventListener('change', e => handleAttendanceObs(e.currentTarget));
   });
+  body.querySelectorAll('[data-att-convocado]').forEach(btn => {
+    btn.addEventListener('click', e => handleAttendanceConvocado(e.currentTarget));
+  });
 }
 
 function renderAttendanceRow(person, personType, record) {
@@ -6231,6 +6272,17 @@ function renderAttendanceRow(person, personType, record) {
   // Hide motive when not absent
   const motiveStyle = r.asistencia === false ? '' : 'visibility:hidden;';
 
+  // "Convocado" column: only for players in a Partido activity.
+  // Defaults to true (called up) so the whole squad is convoked and you deselect
+  // the ones that don't get called this weekend.
+  const act = state.activities.find(a => a.id === openActivityId);
+  const isMatch = act && act.tipo === 'Partido';
+  const showConvocado = isMatch && personType === 'player';
+  const convocado = r.convocado !== false; // default true
+  const convocadoCell = showConvocado
+    ? `<button class="att-convocado ${convocado ? 'active' : ''}" data-att-convocado title="${convocado ? 'Convocado — clic para desconvocar' : 'No convocado — clic para convocar'}">${convocado ? '✓ Conv.' : '– No conv.'}</button>`
+    : '<div class="att-convocado-placeholder"></div>';
+
   return `
     <div class="att-row" data-person-id="${person.id}" data-person-type="${personType}">
       ${num}
@@ -6238,6 +6290,7 @@ function renderAttendanceRow(person, personType, record) {
         <div class="att-row-name">${escapeHtml(person.alias || person.name)}</div>
         ${sub}
       </div>
+      ${convocadoCell}
       <div class="att-toggle-group">
         <button class="att-toggle ${yesActive}" data-att-action="yes">Asiste</button>
         <button class="att-toggle ${noActive}" data-att-action="no">No</button>
@@ -6298,6 +6351,17 @@ async function handleAttendanceObs(inp) {
   const rec = await getOrCreateAttRecord(personId, personType);
   rec.observaciones = inp.value;
   await saveAttendanceRecord(rec);
+}
+
+async function handleAttendanceConvocado(btn) {
+  const row = btn.closest('.att-row');
+  const personId = row.dataset.personId;
+  const personType = row.dataset.personType;
+  const rec = await getOrCreateAttRecord(personId, personType);
+  // Toggle: if it was true (or undefined = default true), turn to false; else back to true
+  rec.convocado = (rec.convocado === false) ? true : false;
+  await saveAttendanceRecord(rec);
+  renderAttendanceBody();
 }
 
 // ============================================================
