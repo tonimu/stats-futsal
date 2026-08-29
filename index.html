@@ -5066,6 +5066,8 @@ async function computeAggregatedStats(selectedMatches) {
       oppGoals: 0,          // GK: goals conceded while on court
       oppOff: 0,            // GK: opponent chances that went out
       gaBlame: 0,
+      duelOffWon: 0, duelOffLost: 0,   // offensive duels won / lost
+      duelDefWon: 0, duelDefLost: 0,   // defensive duels won / lost
       matchesPlayed: 0,     // convoked count
     };
   });
@@ -5113,6 +5115,10 @@ async function computeAggregatedStats(selectedMatches) {
       else if (e.type === 'yellow') s.yellows++;
       else if (e.type === 'red') s.reds++;
       else if (e.type === 'ga_blame') s.gaBlame++;
+      else if (e.type === 'duel_off_won') s.duelOffWon++;
+      else if (e.type === 'duel_off_lost') s.duelOffLost++;
+      else if (e.type === 'duel_def_won') s.duelDefWon++;
+      else if (e.type === 'duel_def_lost') s.duelDefLost++;
       else if (e.type === 'opp_chance') {
         // Attribute opponent chances to the GK: prefer the stored playerId
         // (now always set), fall back to slot 0 for older events.
@@ -5335,7 +5341,8 @@ async function renderPlayerStats(selected) {
   let rows = Object.values(byPlayer).filter(s =>
     s.minutes>0 || s.goals || s.chances || s.assistsGoal || s.assistsNoGoal ||
     s.recoveries || s.losses || s.fouls || s.yellows || s.reds || s.saves ||
-    s.gaBlame || s.oppChances || s.matchesPlayed);
+    s.gaBlame || s.oppChances || s.matchesPlayed ||
+    s.duelOffWon || s.duelOffLost || s.duelDefWon || s.duelDefLost);
 
   // Sorting: default by chances desc. statsFilters.sortKey/sortDir control it.
   const sortKey = statsFilters.sortKey || 'chances';
@@ -5355,6 +5362,14 @@ async function renderPlayerStats(selected) {
       case 'losses': return s.losses || 0;
       case 'gaBlame': return s.gaBlame || 0;
       case 'fouls': return s.fouls || 0;
+      case 'duelOffPct': {
+        const t = (s.duelOffWon || 0) + (s.duelOffLost || 0);
+        return t === 0 ? -1 : (s.duelOffWon / t); // sort by win% ; no-duels last
+      }
+      case 'duelDefPct': {
+        const t = (s.duelDefWon || 0) + (s.duelDefLost || 0);
+        return t === 0 ? -1 : (s.duelDefWon / t);
+      }
       case 'yellows': return s.yellows || 0;
       case 'reds': return s.reds || 0;
       case 'oppGoals': return s.oppGoals || 0;
@@ -5393,6 +5408,13 @@ async function renderPlayerStats(selected) {
     if (calc === 'total') return `${s.oppChances}/${s.oppGoals}/${s.saves}/${s.oppOff}`;
     return `${v(s,s.oppChances)||0}/${v(s,s.oppGoals)||0}/${v(s,s.saves)||0}/${v(s,s.oppOff)||0}`;
   }
+  // Duels cell: "won/total (pct%)". Shows "—" when there are no duels.
+  function duelCell(won, lost) {
+    const total = (won || 0) + (lost || 0);
+    if (total === 0) return '—';
+    const pct = Math.round((won / total) * 100);
+    return `${won}/${total} (${pct}%)`;
+  }
 
   // Sortable header helper: shows ▲/▼ on the active column.
   const sh = (key, label, title) => {
@@ -5416,6 +5438,8 @@ async function renderPlayerStats(selected) {
       ${sh('losses', 'Pérd', 'Pérdidas')}
       ${sh('gaBlame', 'GE·C', 'Goles encajados por su culpa')}
       ${sh('fouls', 'Faltas', 'Faltas')}
+      ${sh('duelOffPct', 'D.Of', 'Duelos ofensivos: ganados/total (%)')}
+      ${sh('duelDefPct', 'D.Def', 'Duelos defensivos: ganados/total (%)')}
       ${sh('yellows', '🟨')}
       ${sh('reds', '🟥')}
       ${sh('oppGoals', 'G.Enc', 'Portero: Goles encajados')}
@@ -5437,6 +5461,8 @@ async function renderPlayerStats(selected) {
           <td>${v(s, s.losses)}</td>
           <td>${v(s, s.gaBlame)}</td>
           <td>${v(s, s.fouls)}</td>
+          <td class="ogpf">${duelCell(s.duelOffWon, s.duelOffLost)}</td>
+          <td class="ogpf">${duelCell(s.duelDefWon, s.duelDefLost)}</td>
           <td>${v(s, s.yellows)}</td>
           <td>${v(s, s.reds)}</td>
           <td>${s.isGK || s.oppChances ? v(s, s.oppGoals) : '—'}</td>
