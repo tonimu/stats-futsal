@@ -3254,6 +3254,15 @@ function getPlayerMatchSeconds(pid) {
   return total;
 }
 
+// Seconds the player has been on court in the CURRENT STINT (i.e. since their
+// last entry to the pitch in this period). Returns 0 if not on court.
+function getPlayerCurrentStintSeconds(pid) {
+  if (!state.match.onCourt.includes(pid)) return 0;
+  const s = state.match.subs[pid];
+  if (!s || s.periodIn == null) return 0;
+  return Math.max(0, currentMatchSeconds() - s.periodIn);
+}
+
 // ============================================================
 // NUMERIC KEYPAD (Sync clock / Edit event time)
 // ============================================================
@@ -4485,14 +4494,16 @@ function renderCourtSlots() {
     const div = document.createElement('div');
     div.className = 'slot' + (player ? '' : ' empty') + (isGK ? ' gk' : '');
     if (player) {
-      const mins = getPlayerMatchSeconds(pid);
+      // On-court: show the CURRENT STINT time (time since they entered the pitch
+      // this shift), not the accumulated match total. Total is shown on the bench.
+      const stintSec = getPlayerCurrentStintSeconds(pid);
       const posBadge = `<span class="pos-pill pos-${player.position}">${player.position}</span>`;
       const cards = playerCardsHtml(pid);
       div.innerHTML = `
         <div class="slot-num">${player.number}</div>
         <div class="slot-info">
           <div class="slot-name">${escapeHtml(displayName(player))} ${cards}</div>
-          <div class="slot-time">${formatTime(mins)} · ${posBadge}</div>
+          <div class="slot-time" title="Tiempo en pista de este turno">▶ ${formatTime(stintSec)} · ${posBadge}</div>
         </div>
         <button class="sub-btn" data-slot="${idx}">Cambio</button>
       `;
