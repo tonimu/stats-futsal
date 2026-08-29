@@ -713,6 +713,21 @@
   .poss-summary-table th { font-size:11px; text-transform:uppercase; color:#64748b; }
   /* Inline card chips (court + bench) */
   .card-chip { font-size: 11px; letter-spacing: -1px; margin-left: 2px; }
+  .rot-chip {
+    display: inline-block;
+    background: #e0e7ff;
+    color: #3730a3;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-left: 4px;
+    letter-spacing: 0.2px;
+  }
+  .rot-pill {
+    background: #e0e7ff !important;
+    color: #3730a3 !important;
+  }
   .bench-item-cards { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
   .bench-item-stats { margin-left: auto; }
 
@@ -3212,18 +3227,16 @@ function endPeriod() {
   if (t.period === 1) {
     t.period = 2;
     t.periodSeconds = 0;
-    // re-open the on-court players' periodIn for new period
-    state.match.onCourt.forEach(pid => {
-      if (pid) {
-        if (!state.match.subs[pid]) state.match.subs[pid] = {totalSeconds:0, periodIn: null, history:[]};
-        state.match.subs[pid].periodIn = 0;
-      }
-    });
+    // Empty the court for the 2nd half — the user will place the starting 5 again,
+    // which counts as a fresh rotation each. This makes rotations explicit.
+    state.match.onCourt = [null, null, null, null, null];
+    // Also close any open periodIn (safety — closeAllOnCourtMinutes already did it)
+    Object.values(state.match.subs).forEach(s => { s.periodIn = null; });
     // Reset the video stopwatch so 2nd-half events are timed from 00:00 again
     if (typeof window.resetVideoStopwatchForNewPeriod === 'function') {
       window.resetVideoStopwatchForNewPeriod();
     }
-    alert('Fin 1ª parte. Empieza 2ª parte (pulsa Play cuando estés listo).\n\nEl cronómetro de vídeo se ha reseteado a 00:00 y arrancará solo cuando le des al Play de la 2ª parte.');
+    alert('Fin 1ª parte. Empieza 2ª parte.\n\nLa pista se ha vaciado: coloca a los 5 jugadores que arranquen la 2ª parte antes de darle a Play.\n\nEl cronómetro de vídeo también se ha reseteado a 00:00.');
   } else {
     alert('Partido terminado. Recuerda guardarlo en el historial.');
   }
@@ -3261,6 +3274,25 @@ function getPlayerCurrentStintSeconds(pid) {
   const s = state.match.subs[pid];
   if (!s || s.periodIn == null) return 0;
   return Math.max(0, currentMatchSeconds() - s.periodIn);
+}
+
+// Rotations = number of times the player has ENTERED the pitch during this match
+// (across both periods). Each entry counts as +1. A starter at the beginning of
+// a period counts as one rotation.
+// We derive it from the subs.history array (which stores {in} entries each time
+// the player enters court) plus, if currently on court with an open periodIn,
+// the current stint as well.
+function getPlayerRotationsCount(pid) {
+  const s = state.match.subs[pid];
+  if (!s) return 0;
+  let count = 0;
+  if (Array.isArray(s.history)) {
+    for (const entry of s.history) if ('in' in entry) count++;
+  }
+  // If they're currently on court and the last entry wasn't recorded in history yet
+  // (periodIn open), it's already been recorded in history when they entered, so
+  // no extra count is needed. The starting 5 of a period get a history entry too.
+  return count;
 }
 
 // ============================================================
@@ -4497,13 +4529,15 @@ function renderCourtSlots() {
       // On-court: show the CURRENT STINT time (time since they entered the pitch
       // this shift), not the accumulated match total. Total is shown on the bench.
       const stintSec = getPlayerCurrentStintSeconds(pid);
+      const rots = getPlayerRotationsCount(pid);
       const posBadge = `<span class="pos-pill pos-${player.position}">${player.position}</span>`;
       const cards = playerCardsHtml(pid);
+      const rotChip = `<span class="rot-chip" title="Rotaciones (entradas a pista)">×${rots}</span>`;
       div.innerHTML = `
         <div class="slot-num">${player.number}</div>
         <div class="slot-info">
           <div class="slot-name">${escapeHtml(displayName(player))} ${cards}</div>
-          <div class="slot-time" title="Tiempo en pista de este turno">▶ ${formatTime(stintSec)} · ${posBadge}</div>
+          <div class="slot-time" title="Tiempo en pista de este turno">▶ ${formatTime(stintSec)} ${rotChip} · ${posBadge}</div>
         </div>
         <button class="sub-btn" data-slot="${idx}">Cambio</button>
       `;
@@ -6031,6 +6065,7 @@ function renderBench() {
 
   benchPlayers.forEach(p => {
     const mins = getPlayerMatchSeconds(p.id);
+    const rots = getPlayerRotationsCount(p.id);
     const cc = cardCounts[p.id] || {yellow: 0, red: 0};
 
     let cardsHtml = '';
@@ -6044,7 +6079,8 @@ function renderBench() {
       <div class="bench-item-name">${escapeHtml(displayName(p))}</div>
       ${cardsHtml ? `<div class="bench-item-cards">${cardsHtml}</div>` : ''}
       <div class="bench-item-stats">
-        <span class="pill">${formatTime(mins)}</span>
+        <span class="pill" title="Tiempo total jugado en el partido">${formatTime(mins)}</span>
+        <span class="pill rot-pill" title="Rotaciones (entradas a pista)">×${rots}</span>
       </div>
     `;
     list.appendChild(item);
