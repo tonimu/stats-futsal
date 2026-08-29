@@ -3348,6 +3348,10 @@ function confirmKeypad() {
   const afterCb = keypadMode.afterConfirm;
   if (keypadMode.kind === 'sync') {
     setRemainingTime(remaining);
+  } else if (keypadMode.kind === 'pending-sub-time') {
+    // Store the desired elapsed time as pending — do NOT touch the official
+    // clock. The value will be applied when the user chooses a player.
+    pendingSubTimeElapsed = elapsedTime;
   } else if (keypadMode.kind === 'edit-event') {
     const evt = state.match.events.find(e => e.id === keypadMode.eventId);
     if (evt) {
@@ -3371,6 +3375,8 @@ let pickerMode = null;  // {kind:'sub-in'|'sub-out'|'action', slot, actionType}
 
 function openPlayerPicker(mode) {
   pickerMode = mode;
+  // Reset any pending sub-time correction: it only applies to the current picker session
+  pendingSubTimeElapsed = null;
   const modal = document.getElementById('playerModal');
   const title = document.getElementById('playerModalTitle');
   const banner = document.getElementById('subTimeBanner');
@@ -3403,15 +3409,26 @@ function openPlayerPicker(mode) {
   modal.style.display = 'flex';
 }
 
+// Pending sub-time correction: while the sub picker is open, the user may edit
+// the time BEFORE choosing a player. We don't touch the official clock yet;
+// we just remember the desired ELAPSED seconds in this variable. It's applied
+// only when the player is actually chosen (in doSubstitution), and discarded
+// if the picker is closed with the X.
+let pendingSubTimeElapsed = null;
+
 function updateSubTimeBanner() {
   const disp = document.getElementById('subTimeDisplay');
-  if (disp) {
-    disp.textContent = formatTime(remainingSeconds(currentMatchSeconds()));
-  }
+  if (!disp) return;
+  // Show the pending value if the user is editing; otherwise the current clock
+  const elapsed = pendingSubTimeElapsed != null ? pendingSubTimeElapsed : currentMatchSeconds();
+  disp.textContent = formatTime(remainingSeconds(elapsed));
+  // Small visual hint when there's a pending unsaved correction
+  disp.style.color = pendingSubTimeElapsed != null ? '#f59e0b' : '#4ade80';
 }
 
 function closePlayerPicker() {
   pickerMode = null;
+  pendingSubTimeElapsed = null;
   document.getElementById('playerModal').style.display = 'none';
   const banner = document.getElementById('subTimeBanner');
   if (banner) banner.style.display = 'none';
@@ -3430,6 +3447,15 @@ function handlePlayerPick(playerId) {
 }
 
 function doSubstitution(slot, newPlayerId) {
+  // If the user adjusted the sub time in the picker (pending), apply it to the
+  // official clock now — right before recording the sub. This is what the user
+  // asked for: don't touch the clock until we actually make the change.
+  if (pendingSubTimeElapsed != null) {
+    const PL = matchPeriodLength();
+    const remaining = Math.max(0, PL - pendingSubTimeElapsed);
+    setRemainingTime(remaining);
+    pendingSubTimeElapsed = null;
+  }
   const now = currentMatchSeconds();
   const oldPlayerId = state.match.onCourt[slot];
 
@@ -6590,9 +6616,10 @@ document.getElementById('subTimeOkBtn').addEventListener('click', () => {
   }
 });
 document.getElementById('subTimeDisplay').addEventListener('click', () => {
-  // Open the keypad in sync mode; when confirmed it will update the main clock,
-  // and updateSubTimeBanner() will refresh the banner display.
-  openKeypad({kind: 'sync', afterConfirm: updateSubTimeBanner});
+  // Open the keypad in "pending sub-time" mode: we DO NOT touch the official
+  // clock. The typed value is stored as a pending elapsed time. It's applied
+  // only when the user actually picks a player (doSubstitution reads it).
+  openKeypad({kind: 'pending-sub-time', afterConfirm: updateSubTimeBanner});
 });
 
 // Sync clock button + ±5/±10 adjustments
