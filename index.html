@@ -2207,7 +2207,7 @@
         <button class="btn btn-ghost btn-tiny" id="duelBackBtn">← Cambiar tipo</button>
       </div>
       <div id="duelKindLabel" style="padding:8px 12px; background:#f1f5f9; border-radius:6px; font-weight:600; margin-bottom:10px; font-size:14px;"></div>
-      <div id="duelCourtList" class="card-person-grid"></div>
+      <div id="duelCourtList" class="player-grid"></div>
     </div>
   </div>
 </div>
@@ -3989,12 +3989,16 @@ function goToDuelPlayerStep(kind) {
   // A duel is an on-court action, same as chances/recoveries/losses — only players
   // currently on court are eligible.
   const onCourtIds = state.match.onCourt.filter(Boolean);
+  // Use the same card style as the "chance" action picker: big dorsal + alias + position pill.
   const courtHtml = onCourtIds.map(pid => {
     const p = getPlayer(pid); if (!p) return '';
-    return `<button class="card-person" data-duelplayer="${p.id}">
-      <span class="cp-num">${p.number ?? '·'}</span>${escapeHtml(displayName(p))}
+    const gkCls = p.position === 'Portero' ? ' gk' : '';
+    return `<button class="player-card${gkCls}" data-duelplayer="${p.id}">
+      <div class="player-num">${p.number ?? '·'}</div>
+      <div class="player-name-card">${escapeHtml(displayName(p))}</div>
+      <div style="margin-top:4px;"><span class="pos-pill pos-${p.position}">${p.position}</span></div>
     </button>`;
-  }).join('') || '<div style="color:#94a3b8; font-size:12px;">Nadie en pista.</div>';
+  }).join('') || '<div style="grid-column:1/-1; padding:20px; text-align:center; color:#5b6776;">Nadie en pista.</div>';
   document.getElementById('duelCourtList').innerHTML = courtHtml;
 
   // Wire player buttons
