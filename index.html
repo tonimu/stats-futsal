@@ -6207,13 +6207,11 @@ function renderAttendanceBody() {
   const records = state.attendanceByActivity[openActivityId] || [];
   const byPerson = Object.fromEntries(records.map(r => [r.personId, r]));
 
-  // Order: Plantilla (by position then number), then Staff (by role order)
-  const posOrder = {'Portero': 0, 'Cierre': 1, 'Ala': 2, 'Pívot': 3};
+  // Plantilla: ordenada por dorsal ascendente (los sin dorsal, al final)
   const players = [...state.roster].sort((a, b) => {
-    const pa = posOrder[a.position] ?? 9;
-    const pb = posOrder[b.position] ?? 9;
-    if (pa !== pb) return pa - pb;
-    return (a.number || 0) - (b.number || 0);
+    const na = a.number != null ? Number(a.number) : 999;
+    const nb = b.number != null ? Number(b.number) : 999;
+    return na - nb;
   });
   const roleOrder = Object.fromEntries(STAFF_ROLES.map((r, i) => [r, i]));
   const staff = [...state.staff].sort((a, b) => {
