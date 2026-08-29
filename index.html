@@ -2740,6 +2740,11 @@ async function loadState() {
       state.match.timer.running = false;
       state.match.timer.startedAt = null;
     }
+    // Preload attendance of the linked activity so bench/convocatoria are correct on startup
+    if (state.match.activityId) {
+      try { await loadAttendanceForActivity(state.match.activityId); }
+      catch (e) { console.warn('No se pudo precargar asistencia:', e); }
+    }
   }
 }
 
@@ -5866,6 +5871,11 @@ async function activateMatch(matchId) {
   // Remove from history (it's now the active match, not a pending listing)
   state.history = state.history.filter(m => m.id !== matchId);
   await setSetting('activeMatchId', matchId);
+  // Preload the linked activity's attendance so bench/convocatoria are correct immediately
+  if (dbMatch.activityId) {
+    try { await loadAttendanceForActivity(dbMatch.activityId); }
+    catch (e) { console.warn('No se pudo precargar asistencia:', e); }
+  }
   await saveCurrentMatch();
   renderAll();
 }
@@ -5875,7 +5885,19 @@ async function activateMatch(matchId) {
 // ============================================================
 // Returns the most recent Activity of type "Partido" whose date <= today.
 // (We pick the most recent past or today; future fixtures don't auto-link.)
+// Returns the activity linked to the CURRENT ACTIVE MATCH (via match.activityId).
+// This is the correct source of truth for attendance/convocatoria while a match
+// is being played — regardless of what other matches exist on other dates.
+// Falls back to the most recent past match activity only if there's no active
+// match or no activityId link (e.g. very old matches created before the link).
 function getMostRecentMatchActivity() {
+  // Priority 1: the activity explicitly linked to the active match
+  if (state.match && state.match.activityId) {
+    const linked = state.activities.find(a => a.id === state.match.activityId);
+    if (linked) return linked;
+  }
+  // Fallback: most recent past match activity (used when no match is active or
+  // legacy matches without activityId)
   const today = new Date().toISOString().slice(0, 10);
   const past = state.activities
     .filter(a => a.tipo === 'Partido' && (a.date || '') <= today)
