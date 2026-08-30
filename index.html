@@ -3281,18 +3281,14 @@ function getPlayerCurrentStintSeconds(pid) {
 // the current stint as well.
 function getPlayerRotationsCount(pid) {
   const s = state.match.subs[pid];
-  return countRotationsFromSub(s);
-}
-
-// Generic rotation counter that works on any sub-record shape (both live
-// state.match.subs[pid] and the plain records loaded from IndexedDB via
-// loadMatchData). Counts every entry in `history` that has an `in` field:
-// each represents one time the player took the court. Returns 0 if the sub
-// record is missing or has no history.
-function countRotationsFromSub(s) {
-  if (!s || !Array.isArray(s.history)) return 0;
+  if (!s) return 0;
   let count = 0;
-  for (const entry of s.history) if ('in' in entry) count++;
+  if (Array.isArray(s.history)) {
+    for (const entry of s.history) if ('in' in entry) count++;
+  }
+  // If they're currently on court and the last entry wasn't recorded in history yet
+  // (periodIn open), it's already been recorded in history when they entered, so
+  // no extra count is needed. The starting 5 of a period get a history entry too.
   return count;
 }
 
@@ -3415,7 +3411,27 @@ function openEditEventTime(eventId) {
 // ============================================================
 let pickerMode = null;  // {kind:'sub-in'|'sub-out'|'action', slot, actionType}
 
+// ---- Picker double-tap / tap-through guard ----------------------------------
+// After a successful player pick we briefly block any new picker from opening
+// or any new pick from being handled. This absorbs two mobile problems:
+//   1) Tap-through: a click synthesized after touchend fires on whatever is
+//      under the picker after it closes — often a slot button — and opens a
+//      brand-new picker the user didn't intend.
+//   2) Rapid double-tap: two taps land before the second picker's UI can
+//      even settle, and the same player gets subbed into two slots (this is
+//      the exact "SAUL en dos slots" bug from the Castellar match).
+// 400ms is long enough to swallow the touch→click delay (<~300ms on Android/
+// iOS) but short enough that a deliberate operator won't feel it.
+let pickerBusy = false;
+let pickerBusyTimer = null;
+function markPickerBusy(ms = 400) {
+  pickerBusy = true;
+  if (pickerBusyTimer) clearTimeout(pickerBusyTimer);
+  pickerBusyTimer = setTimeout(() => { pickerBusy = false; pickerBusyTimer = null; }, ms);
+}
+
 function openPlayerPicker(mode) {
+  if (pickerBusy) return;  // ignore stale opens right after a pick
   pickerMode = mode;
   // Reset any pending sub-time correction: it only applies to the current picker session
   pendingSubTimeElapsed = null;
@@ -3477,15 +3493,24 @@ function closePlayerPicker() {
 }
 
 function handlePlayerPick(playerId) {
+  if (pickerBusy) return;    // absorb the trailing click of a double-tap
   if (!pickerMode) return;
-  if (pickerMode.kind === 'sub-in') {
-    doSubstitution(pickerMode.slot, playerId);
-  } else if (pickerMode.kind === 'action') {
-    const extra = {};
-    if (pickerMode.result) extra.result = pickerMode.result;
-    logAction(pickerMode.actionType, playerId, extra);
+  // Consume the mode immediately so any queued click handler that fires
+  // before the modal is torn down finds nothing to do.
+  const mode = pickerMode;
+  pickerMode = null;
+  markPickerBusy(400);
+  try {
+    if (mode.kind === 'sub-in') {
+      doSubstitution(mode.slot, playerId);
+    } else if (mode.kind === 'action') {
+      const extra = {};
+      if (mode.result) extra.result = mode.result;
+      logAction(mode.actionType, playerId, extra);
+    }
+  } finally {
+    closePlayerPicker();
   }
-  closePlayerPicker();
 }
 
 function doSubstitution(slot, newPlayerId) {
@@ -5062,13 +5087,7 @@ async function loadMatchData(matchId, isActive) {
   const subRecs = await dbGetAllByIndex('subs', 'matchId', matchId);
   const subs = {};
   (subRecs || []).forEach(s => {
-    // Preserve full sub record so we can compute stats that need history
-    // (e.g. rotations = number of times the player entered the pitch).
-    subs[s.playerId] = {
-      totalSeconds: s.totalSeconds || 0,
-      history: Array.isArray(s.history) ? s.history : [],
-      periodIn: s.periodIn ?? null,
-    };
+    subs[s.playerId] = {totalSeconds: s.totalSeconds || 0};
   });
   _matchDataCache[matchId] = {events: events || [], subs};
   return _matchDataCache[matchId];
@@ -5133,7 +5152,6 @@ async function computeAggregatedStats(selectedMatches) {
       duelOffWon: 0, duelOffLost: 0,   // offensive duels won / lost
       duelDefWon: 0, duelDefLost: 0,   // defensive duels won / lost
       matchesPlayed: 0,     // convoked count
-      rotations: 0,         // total times entered the pitch across matches
     };
   });
 
@@ -5160,16 +5178,6 @@ async function computeAggregatedStats(selectedMatches) {
       if (!byPlayer[pid]) continue;
       const mins = m.isActive ? getPlayerMatchSeconds(pid) : (s.totalSeconds || 0);
       if (mins > 0) byPlayer[pid].minutes += mins;
-    }
-
-    // Rotations = times entered pitch. For the active match use the live
-    // helper (reads state.match.subs); for saved matches read history from
-    // the sub record we just fetched. Rotations are physical actions and
-    // are NOT filtered by the J5 situation filter (same rationale as minutes).
-    for (const [pid, s] of Object.entries(data.subs)) {
-      if (!byPlayer[pid]) continue;
-      const rots = m.isActive ? getPlayerRotationsCount(pid) : countRotationsFromSub(s);
-      if (rots > 0) byPlayer[pid].rotations += rots;
     }
 
     // Events (filtered by J5 situation)
@@ -5416,7 +5424,7 @@ async function renderPlayerStats(selected) {
   let rows = Object.values(byPlayer).filter(s =>
     s.minutes>0 || s.goals || s.chances || s.assistsGoal || s.assistsNoGoal ||
     s.recoveries || s.losses || s.fouls || s.yellows || s.reds || s.saves ||
-    s.gaBlame || s.oppChances || s.matchesPlayed || s.rotations ||
+    s.gaBlame || s.oppChances || s.matchesPlayed ||
     s.duelOffWon || s.duelOffLost || s.duelDefWon || s.duelDefLost);
 
   // Sorting: default by chances desc. statsFilters.sortKey/sortDir control it.
@@ -5429,11 +5437,6 @@ async function renderPlayerStats(selected) {
       case 'position': return s.position || '';
       case 'matchesPlayed': return s.matchesPlayed || 0;
       case 'minutes': return s.minutes || 0;
-      case 'rotations': {
-        if (statsFilters.calc === 'perMatch') return s.matchesPlayed ? s.rotations / s.matchesPlayed : 0;
-        if (statsFilters.calc === 'perTime')  return s.minutes ? s.rotations / (s.minutes/60) : 0;
-        return s.rotations || 0;
-      }
       case 'goals': return s.goals || 0;
       case 'chances': return s.chances || 0;
       case 'assistsGoal': return s.assistsGoal || 0;
@@ -5510,7 +5513,6 @@ async function renderPlayerStats(selected) {
       ${sh('position', 'Pos')}
       ${sh('matchesPlayed', 'PC', 'Partidos convocado')}
       ${sh('minutes', 'Min')}
-      ${sh('rotations', 'Rot', 'Rotaciones (veces que ha entrado a pista)')}
       ${sh('goals', 'G', 'Goles')}
       ${sh('chances', 'O/G/P/F', 'Ocasiones/Goles/Paradas rival/Fuera (ordena por ocasiones)')}
       ${sh('assistsGoal', 'A·G', 'Asistencias de gol')}
@@ -5534,7 +5536,6 @@ async function renderPlayerStats(selected) {
           <td><span class="pos-pill pos-${s.position}">${s.position}</span></td>
           <td>${s.matchesPlayed || ''}</td>
           <td>${minCell(s)}</td>
-          <td>${v(s, s.rotations)}</td>
           <td>${v(s, s.goals)}</td>
           <td class="ogpf">${ogpf(s)}</td>
           <td>${v(s, s.assistsGoal)}</td>
