@@ -4307,75 +4307,128 @@ async function saveEventEdit() {
 
 // Recompute minutes played for every player, by replaying substitution events
 // from scratch. Called when a sub's time is edited manually.
-// Algorithm:
-//   For each player, collect their sub events (as in/out entries per period),
-//   plus the initial on-court state (period-start = "in") and the current end
-//   (period-end or current time = "out" if still on court). Then sum durations.
+//
+// Algorithm (period-aware):
+//   Periods 1 and 2 are processed INDEPENDENTLY, mirroring what happens in
+//   live play: at halftime the court is emptied and the user places 5 fresh
+//   starters for the 2nd half (each placement recorded as a sub event with
+//   playerOutId=null). So for each period we:
+//     1. Determine who was on court at the START of that period.
+//     2. Open {in: 0, period} entries for those starters.
+//     3. Replay only that period's sub events, pushing {out, period} for
+//        the outgoing player and {in, period} for the incoming one.
+//     4. Close everyone still on court at the END of that period with
+//        {out: closeTime, period} — closeTime is PL for a completed period,
+//        or currentMatchSeconds() if it's the live in-progress period.
+//   Then sum consecutive in/out pairs (matched by period) per player.
+//
+// This fixes a bug where the previous version only closed ONCE at the very
+// end using the current period, so players who were on court at the end of
+// the 1st half never got their P1 stint closed. That silently dropped their
+// P1 minutes (in-P1 with the next out-P2 mismatch is skipped in the sum
+// loop, and any period-2 placement of the same slot polluted their history
+// with a bogus {out: 0, period: 2}).
 async function recomputePlayerMinutesFromSubs() {
   const m = state.match;
   if (!m) return;
-  const subEvts = m.events.filter(e => e.type === 'sub').sort((a,b) => (a.period - b.period) || (a.time - b.time));
+  const PL = matchPeriodLength();
+  const currentPeriod = (m.timer && m.timer.period) || 1;
 
-  // Reset all subs totals
+  const subEvts = m.events
+    .filter(e => e.type === 'sub')
+    .sort((a, b) => (a.period - b.period) || (a.time - b.time));
+
+  // Reset all subs totals + history + periodIn
   for (const pid of Object.keys(m.subs)) {
     m.subs[pid].totalSeconds = 0;
     m.subs[pid].history = [];
+    m.subs[pid].periodIn = null;
   }
+  const ensureSubEntry = (pid) => {
+    if (!m.subs[pid]) m.subs[pid] = {totalSeconds: 0, periodIn: null, history: []};
+  };
 
-  // Track who is on court per period, starting from the initial roster.
-  // NOTE: we assume the initial onCourt (state.match.onCourt as it was at match start)
-  // is preserved in the current onCourt if no subs happened before period 1 start.
-  // For the recompute we walk sub events in order across periods.
-  // For each period, we need to know who WAS on court at the start.
-  // Simplification: we take state.match.onCourt at time=0 as the initial 5, and
-  // we replay subs from there for both periods (assuming period 2 starts with
-  // whoever was on court at the end of period 1 — that's true unless the user
-  // did halftime changes without registering them; if so, they need to edit
-  // manually).
-
-  // Get initial on-court from the earliest known state — best effort: use the
-  // first sub event's onCourt snapshot as the state RIGHT AFTER that sub, so
-  // subtract the sub itself; if no subs exist, use current onCourt.
-  let onCourt;
-  const firstSub = subEvts[0];
-  if (firstSub) {
-    onCourt = [...(firstSub.onCourt || m.onCourt)];
-    // Undo the first sub to get pre-sub state
-    if (firstSub.slot != null) {
-      onCourt[firstSub.slot] = firstSub.playerOutId || null;
-    }
-  } else {
-    onCourt = [...m.onCourt];
-  }
-
-  // Open "in" entries for the initial 5 at t=0, period 1
-  onCourt.forEach(pid => {
-    if (pid && m.subs[pid]) m.subs[pid].history.push({in: 0, period: 1});
-  });
-
-  // Replay subs
+  // Group subs by period
+  const subsByPeriod = {1: [], 2: []};
   for (const s of subEvts) {
-    const slot = s.slot;
-    if (slot == null) continue;
-    const outPid = onCourt[slot];
-    if (outPid && m.subs[outPid]) {
-      m.subs[outPid].history.push({out: s.time, period: s.period});
-    }
-    const inPid = s.playerId;
-    if (inPid) {
-      if (!m.subs[inPid]) m.subs[inPid] = {totalSeconds: 0, periodIn: null, history: []};
-      m.subs[inPid].history.push({in: s.time, period: s.period});
-    }
-    onCourt[slot] = inPid || null;
+    if (subsByPeriod[s.period]) subsByPeriod[s.period].push(s);
   }
 
-  // Close open "in" entries at period end (or current time if it's the live period)
-  const PL = matchPeriodLength();
-  onCourt.forEach(pid => {
-    if (pid && m.subs[pid]) m.subs[pid].history.push({out: PL, period: m.timer.period});
-  });
+  // Process one period. If isCurrent, we leave open ins un-closed so the live
+  // minute counter can keep running (via periodIn), and return each on-court
+  // player's most-recent "in" time.
+  const processPeriod = (period, initialOnCourt, closeTime, isCurrent) => {
+    const onCourt = [...initialOnCourt];
+    const lastInTime = {}; // pid -> time of their currently-open "in" this period
 
-  // Sum durations per player from consecutive in/out pairs
+    onCourt.forEach(pid => {
+      if (pid) {
+        ensureSubEntry(pid);
+        m.subs[pid].history.push({in: 0, period});
+        lastInTime[pid] = 0;
+      }
+    });
+
+    for (const s of subsByPeriod[period]) {
+      const slot = s.slot;
+      if (slot == null) continue;
+      const outPid = onCourt[slot];
+      if (outPid) {
+        ensureSubEntry(outPid);
+        m.subs[outPid].history.push({out: s.time, period});
+        delete lastInTime[outPid];
+      }
+      const inPid = s.playerId;
+      if (inPid) {
+        ensureSubEntry(inPid);
+        m.subs[inPid].history.push({in: s.time, period});
+        lastInTime[inPid] = s.time;
+      }
+      onCourt[slot] = inPid || null;
+    }
+
+    if (!isCurrent) {
+      // Completed period — close every still-on-court player.
+      onCourt.forEach(pid => {
+        if (pid) m.subs[pid].history.push({out: closeTime, period});
+      });
+      return {onCourt, lastInTime: {}, closed: true};
+    }
+    // Live period — leave ins open; caller will restore periodIn for these.
+    return {onCourt, lastInTime, closed: false};
+  };
+
+  // ---------- Period 1 ----------
+  // Initial on-court for P1: back out the first P1 sub (its onCourt snapshot
+  // is post-sub; reversing gives pre-sub, i.e. the starting 5). If there are
+  // no P1 subs AND we're still in P1, fall back to m.onCourt (current state).
+  // If we're already past P1 but there were no P1 subs, we can't reliably
+  // reconstruct the P1 starters — same limitation the old code had.
+  let p1Initial = [null, null, null, null, null];
+  const firstP1 = subsByPeriod[1][0];
+  if (firstP1) {
+    p1Initial = [...(firstP1.onCourt || m.onCourt || p1Initial)];
+    if (firstP1.slot != null) {
+      p1Initial[firstP1.slot] = firstP1.playerOutId || null;
+    }
+  } else if (currentPeriod === 1) {
+    p1Initial = [...(m.onCourt || p1Initial)];
+  }
+  const p1IsCurrent = (currentPeriod === 1);
+  const p1CloseTime = p1IsCurrent ? Math.min(currentMatchSeconds(), PL) : PL;
+  const p1Res = processPeriod(1, p1Initial, p1CloseTime, p1IsCurrent);
+
+  // ---------- Period 2 ----------
+  // At halftime the live logic empties the court, so P2 starts from an empty
+  // court and the placements are recorded as sub events with playerOutId=null.
+  let p2Res = null;
+  if (currentPeriod >= 2 || subsByPeriod[2].length > 0) {
+    const p2IsCurrent = (currentPeriod === 2);
+    const p2CloseTime = p2IsCurrent ? Math.min(currentMatchSeconds(), PL) : PL;
+    p2Res = processPeriod(2, [null, null, null, null, null], p2CloseTime, p2IsCurrent);
+  }
+
+  // ---------- Sum durations per player from matched in/out pairs ----------
   for (const pid of Object.keys(m.subs)) {
     const h = m.subs[pid].history;
     let total = 0;
@@ -4391,8 +4444,17 @@ async function recomputePlayerMinutesFromSubs() {
       }
     }
     m.subs[pid].totalSeconds = total;
-    // periodIn/periodOut left null — we'll recompute live values normally
     m.subs[pid].periodIn = null;
+  }
+
+  // Restore periodIn for players currently on court in the live period, so the
+  // live minute counter keeps advancing after the recompute (previously it
+  // would freeze until the next sub because periodIn was blanked for everyone).
+  const liveRes = (p2Res && !p2Res.closed) ? p2Res : (!p1Res.closed ? p1Res : null);
+  if (liveRes) {
+    for (const [pid, tIn] of Object.entries(liveRes.lastInTime)) {
+      if (m.subs[pid]) m.subs[pid].periodIn = tIn;
+    }
   }
 
   // Persist all subs
