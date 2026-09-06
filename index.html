@@ -224,7 +224,9 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-direction: column;
+    /* Row (not column) so Stats sits inline with Fin parte / period label,
+       matching the visual weight of Play / J5 / AtqDef on the left. */
+    flex-direction: row;
     justify-content: center;
   }
   .clock {
@@ -325,6 +327,42 @@
     color: #fff;
     box-shadow: 0 0 12px rgba(168, 85, 247, 0.5);
   }
+  /* Topbar-side action buttons (AtqDef, Stats): SAME visual weight as Play
+     and J5 so they don't get lost. Icon on top, short label below, tall enough
+     to match the clock-action-btn (Sync/Play) height. */
+  .topbar-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    height: 64px;              /* == clock-action-btn height (Play) */
+    padding: 6px 16px;
+    border-radius: 10px;
+    border: 2px solid #dde3ea;
+    background: #f8fafc;
+    color: #334155;
+    min-width: 78px;           /* wider so the label reads comfortably */
+    font-weight: 700;
+    transition: all 0.12s;
+    cursor: pointer;
+  }
+  .topbar-action-btn .tab-icon { font-size: 22px; line-height: 1; }
+  .topbar-action-btn .tab-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+  .topbar-action-btn:active { transform: scale(0.96); }
+  .topbar-action-btn.stats {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+  }
+  /* AtqDef active state → orange (already defined below but the topbar one
+     also gets it via .atkdef-active for backwards compat). */
+  .topbar-action-btn.atkdef-active {
+    background: #ea580c;
+    border-color: #ea580c;
+    color: #fff;
+    box-shadow: 0 0 12px rgba(234, 88, 12, 0.5);
+  }
   .scoreboard {
     display: flex;
     align-items: center;
@@ -390,14 +428,22 @@
   .result-btn.result-gol:hover { background: #dcfce7; }
 
   /* ===== MAIN MATCH LAYOUT ===== */
+  /* 3 columns while there's room: [players] [actions] [event log].
+     Below 1200px we fall back to 2 (log stacks under actions). Below the
+     responsive breakpoint further down, everything stacks. */
   .main {
     display: grid;
-    grid-template-columns: 360px 1fr;
+    grid-template-columns: 340px minmax(300px, 380px) 1fr;
     gap: 12px;
     padding: 12px;
     min-height: calc(100vh - 110px);
   }
+  @media (max-width: 1200px) {
+    .main { grid-template-columns: 320px 1fr; }
+    .match-log-col { grid-column: 1 / -1; }
+  }
   .match-left { display: flex; flex-direction: column; }
+  .match-log-col { display: flex; flex-direction: column; min-width: 0; }
 
   /* ===== BENCH (substitutes panel) ===== */
   .bench-list {
@@ -733,19 +779,19 @@
 
   .action-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
   }
   .action-btn {
     background: #ffffff;
     border: 2px solid #dde3ea;
     border-radius: 12px;
-    padding: 16px 8px;
+    padding: 14px 6px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
-    min-height: 80px;
+    gap: 4px;
+    min-height: 72px;
     transition: all 0.1s;
   }
   .action-btn:active {
@@ -756,8 +802,53 @@
     border-color: #2563eb;
     background: #1e3a8a;
   }
-  .action-icon { font-size: 24px; }
-  .action-label { font-size: 13px; font-weight: 600; }
+  .action-icon { font-size: 22px; }
+  .action-label { font-size: 12px; font-weight: 600; text-align: center; line-height: 1.15; }
+
+  /* Event log rendered as a compact table (3rd column in Match view) */
+  .event-log-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .event-log-table thead th {
+    position: sticky;
+    top: 0;
+    background: #f1f5f9;
+    color: #475569;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-size: 10px;
+    padding: 6px 6px;
+    text-align: left;
+    border-bottom: 1px solid #cbd5e1;
+    z-index: 1;
+  }
+  .event-log-table tbody td {
+    padding: 5px 6px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: middle;
+  }
+  .event-log-table tbody tr:hover { background: #f8fafc; }
+  .event-log-table .col-time { white-space: nowrap; color: #64748b; font-variant-numeric: tabular-nums; }
+  .event-log-table .col-type { min-width: 0; }
+  .event-log-table .col-player { color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+  .event-log-table .col-marks { white-space: nowrap; text-align: right; }
+  .event-log-table .col-actions { white-space: nowrap; text-align: right; }
+  .event-log-table .col-actions button {
+    background: transparent;
+    border: none;
+    padding: 2px 4px;
+    cursor: pointer;
+    font-size: 13px;
+    opacity: 0.7;
+  }
+  .event-log-table .col-actions button:hover { opacity: 1; }
+  .event-log-table .col-actions .del { color: #dc2626; }
+  .event-log-table .sub-row { background: #fef3c7; }
+  .event-log-table .sub-row td { color: #78350f; font-style: italic; }
+  .event-log-table .empty-row td { text-align: center; color: #64748b; padding: 20px; font-style: italic; }
   /* A grid cell holding two stacked buttons (e.g. the two assists, the two cards) */
   .action-pair {
     display: flex;
@@ -1662,7 +1753,7 @@
 
   @media (max-width: 900px) {
     .main { grid-template-columns: 1fr; }
-    .action-grid { grid-template-columns: repeat(3, 1fr); }
+    .action-grid { grid-template-columns: repeat(2, 1fr); }
     .att-row { grid-template-columns: 1fr; gap: 6px; }
     /* Force compact sidebar on small screens */
     .app-shell { --sidebar-width: 90px; }
@@ -1802,6 +1893,11 @@
           </div>
           <button class="btn btn-ghost clock-action-btn" id="syncClockBtn" title="Sincronizar con marcador">🎯<span>Sync</span></button>
           <button class="btn btn-success clock-action-btn" id="playPauseBtn">▶<span>Play</span></button>
+          <!-- AtqDef sits between Play and J5 Nosotros (same visual weight as J5) -->
+          <button class="topbar-action-btn" id="atkDefBtn" title="Modo Ataque/Defensa: configura parejas atacante+defensor que se rotan con un toque">
+            <span class="tab-icon">⚔️</span>
+            <span class="tab-label">AtqDef</span>
+          </button>
         </div>
 
         <!-- CENTER: J5 + scoreboard + J5 -->
@@ -1833,13 +1929,16 @@
           </div>
         </div>
 
-        <!-- RIGHT: period info + live stats -->
+        <!-- RIGHT: Stats between J5 Rival and Fin parte, then period info -->
         <div class="topbar-right">
-          <div class="period" id="periodLabel">1ª Parte</div>
+          <!-- Stats sits between J5 Rival and Fin parte (same visual weight) -->
+          <button class="topbar-action-btn stats" id="liveStatsBtn" title="Ver estadísticas del partido en vivo">
+            <span class="tab-icon">📊</span>
+            <span class="tab-label">Stats</span>
+          </button>
           <button class="btn btn-ghost" id="endPeriodBtn">Fin parte</button>
+          <div class="period" id="periodLabel">1ª Parte</div>
           <button class="btn btn-ghost" id="clockModeBtn" title="Cambiar modo del reloj (cuenta atrás / tiempo corrido)" style="font-size:11px; padding:4px 8px;">⏱ Cuenta atrás</button>
-          <button class="btn btn-ghost" id="atkDefBtn" title="Modo Ataque/Defensa: configura parejas atacante+defensor que se rotan con un toque" style="font-size:11px; padding:4px 8px;">⚔️ AtqDef</button>
-          <button class="btn btn-primary" id="liveStatsBtn" title="Ver estadísticas del partido en vivo" style="font-size:11px; padding:4px 8px;">📊 Stats</button>
         </div>
       </div>
 
@@ -1850,7 +1949,7 @@
       <div id="matchActivityBanner" style="display:none; padding: 8px 12px; background:#f1f5f9; border-bottom:1px solid #dde3ea; font-size:13px; color:#334155;"></div>
 
       <div class="main">
-        <!-- Left: court + bench -->
+        <!-- Column 1: court + bench -->
         <div class="match-left">
           <div class="panel">
             <div class="panel-title">En pista</div>
@@ -1870,40 +1969,42 @@
           </div>
         </div>
 
-        <!-- Right: actions + log -->
+        <!-- Column 2: actions (2-column grid, 7 rows in the exact order Toni asked) -->
         <div class="actions-panel">
           <div class="panel">
             <div class="panel-title">Registrar acción</div>
             <div id="actionPrompt"></div>
             <div class="action-grid">
-              <!-- Row 1 -->
+              <!-- Row 1: Ocasión / Ocasión rival -->
               <button class="action-btn" data-type="chance"><span class="action-icon">🎯</span><span class="action-label">Ocasión</span></button>
-              <button class="action-btn" data-type="ga_blame"><span class="action-icon">🥅</span><span class="action-label">Gol enc. culpa</span></button>
               <button class="action-btn" data-type="opp_chance"><span class="action-icon">🆚</span><span class="action-label">Ocasión rival</span></button>
-              <!-- Row 2 -->
-              <div class="action-pair">
-                <button class="action-btn small" data-type="assist_goal"><span class="action-icon">🅰️</span><span class="action-label">Asist. gol</span></button>
-                <button class="action-btn small" data-type="assist_nogoal"><span class="action-icon">➰</span><span class="action-label">Asist. s/gol</span></button>
-              </div>
-              <button class="action-btn" data-type="loss"><span class="action-icon">❌</span><span class="action-label">Pérdida</span></button>
-              <button class="action-btn" data-type="opp_foul"><span class="action-icon">🚩</span><span class="action-label">Falta rival</span></button>
-              <!-- Row 3 -->
+              <!-- Row 2: Asistencia gol / Asistencia sin gol -->
+              <button class="action-btn" data-type="assist_goal"><span class="action-icon">🅰️</span><span class="action-label">Asist. gol</span></button>
+              <button class="action-btn" data-type="assist_nogoal"><span class="action-icon">➰</span><span class="action-label">Asist. s/gol</span></button>
+              <!-- Row 3: Recuperación / Pérdida -->
               <button class="action-btn" data-type="recovery"><span class="action-icon">🛡️</span><span class="action-label">Recuperación</span></button>
-              <div class="action-pair">
-                <button class="action-btn small card-yellow" id="cardYellowBtn"><span class="action-icon">🟨</span><span class="action-label">Amarilla</span></button>
-                <button class="action-btn small card-red" id="cardRedBtn"><span class="action-icon">🟥</span><span class="action-label">Roja</span></button>
-              </div>
+              <button class="action-btn" data-type="loss"><span class="action-icon">❌</span><span class="action-label">Pérdida</span></button>
+              <!-- Row 4: Duelos / GE culpa -->
+              <button class="action-btn" id="duelBtn" style="border-color:#8b5cf6;"><span class="action-icon">⚔️</span><span class="action-label">Duelos</span></button>
+              <button class="action-btn" data-type="ga_blame"><span class="action-icon">🥅</span><span class="action-label">Gol enc. culpa</span></button>
+              <!-- Row 5: Falta / Falta rival -->
               <button class="action-btn" data-type="foul"><span class="action-icon">⚠️</span><span class="action-label">Falta</span></button>
-              <!-- Row 4: Penalti + Doble penalti + Duelos -->
+              <button class="action-btn" data-type="opp_foul"><span class="action-icon">🚩</span><span class="action-label">Falta rival</span></button>
+              <!-- Row 6: Penalti / Doble penalti -->
               <button class="action-btn" id="penaltyBtn" style="border-color:#dc2626;"><span class="action-icon">🥅</span><span class="action-label">Penalti</span></button>
               <button class="action-btn" id="doublePenaltyBtn" style="border-color:#991b1b; background:#fee2e2;"><span class="action-icon">🥅🥅</span><span class="action-label">Doble pen.</span></button>
-              <button class="action-btn" id="duelBtn" style="border-color:#8b5cf6;"><span class="action-icon">⚔️</span><span class="action-label">Duelos</span></button>
+              <!-- Row 7: Amarilla / Roja -->
+              <button class="action-btn card-yellow" id="cardYellowBtn"><span class="action-icon">🟨</span><span class="action-label">Amarilla</span></button>
+              <button class="action-btn card-red" id="cardRedBtn"><span class="action-icon">🟥</span><span class="action-label">Roja</span></button>
             </div>
           </div>
+        </div>
 
-          <div class="panel">
+        <!-- Column 3: event log as compact table -->
+        <div class="match-log-col">
+          <div class="panel" style="height:100%; display:flex; flex-direction:column;">
             <div class="panel-title">Eventos</div>
-            <div class="event-log" id="eventLog"></div>
+            <div id="eventLog" style="flex:1; overflow:auto; min-height:200px;"></div>
           </div>
         </div>
       </div>
@@ -5747,14 +5848,16 @@ function renderClock() {
   // Body class for the dashed-slot visual cue when either J5 is on
   document.body.classList.toggle('j5-on', !!state.match.juego5For || !!state.match.juego5Against);
 
-  // AtqDef button: highlighted orange when the mode is active
+  // AtqDef button: highlighted orange when the mode is active.
+  // The button uses two spans (icon + label), so update the label text only
+  // — don't blast textContent, or you'd wipe the icon and break the flex.
   const atkDefBtn = document.getElementById('atkDefBtn');
   if (atkDefBtn) {
     const active = !!state.match.attackDefenseActive;
     atkDefBtn.classList.toggle('atkdef-active', active);
-    // Show a hint in the label about how many pairs are active
     const nPairs = (state.match.attackDefensePairs || []).length;
-    atkDefBtn.textContent = active ? `⚔️ AtqDef · ${nPairs}` : '⚔️ AtqDef';
+    const labelEl = atkDefBtn.querySelector('.tab-label');
+    if (labelEl) labelEl.textContent = active ? `AtqDef · ${nPairs}` : 'AtqDef';
   }
 
   // Fouls counters for the CURRENT period (reset to 0 each period)
@@ -5896,19 +5999,109 @@ function renderActionPrompt() {
 function renderEventLog() {
   const container = document.getElementById('eventLog');
   if (!container) return;
-  container.innerHTML = '';
 
-  // Events shown reverse-chronologically (newest on top), most recent 30.
+  // Events shown reverse-chronologically (newest on top), most recent 50.
   // Legacy possession events (from before possession was removed) are hidden.
   const allEvents = [...state.match.events];
-  const actionEvents = allEvents.filter(e => e.type !== 'possession').reverse().slice(0, 30);
+  const actionEvents = allEvents.filter(e => e.type !== 'possession').reverse().slice(0, 50);
 
+  // Build a compact table. We keep the header sticky so it stays visible
+  // while the user scrolls back through the match.
+  let html = `
+    <table class="event-log-table">
+      <thead>
+        <tr>
+          <th class="col-time">Min</th>
+          <th class="col-type">Acción</th>
+          <th class="col-player">Jugador</th>
+          <th class="col-marks"></th>
+          <th class="col-actions"></th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
   if (actionEvents.length === 0) {
-    container.innerHTML = '<div style="color:#64748b; font-size:13px; padding:8px;">Sin eventos todavía</div>';
+    html += `<tr class="empty-row"><td colspan="5">Sin eventos todavía</td></tr>`;
   } else {
-    actionEvents.forEach(evt => container.appendChild(buildEventRow(evt)));
+    html += actionEvents.map(evt => buildEventTableRow(evt)).join('');
   }
+  html += `</tbody></table>`;
+  container.innerHTML = html;
   bindEventRows(container);
+}
+
+// Build one <tr> for the compact event log table (Match view).
+function buildEventTableRow(evt) {
+  const player = evt.playerId ? getPlayer(evt.playerId) : null;
+  const periodLabel = evt.period === 1 ? '1ªP' : '2ªP';
+
+  // Label / player rendering — same logic used by the old card renderer but
+  // packed into fewer chars, since the table is narrow.
+  let label = actionLabel(evt.type);
+  let isSub = false;
+  if (evt.type === 'chance') {
+    if (evt.result === 'gol') label = '⚽ Gol';
+    else if (evt.result === 'parada') label = 'Ocasión (parada)';
+    else label = 'Ocasión (fuera)';
+  } else if (evt.type === 'opp_chance') {
+    if (evt.result === 'gol') label = '⚽ Gol rival';
+    else if (evt.result === 'parada') label = '🧤 Parada';
+    else label = 'Oc. rival (fuera)';
+  } else if (evt.type === 'yellow') {
+    const yellowsUpTo = state.match.events.filter(e =>
+      e.type === 'yellow' && e.playerId === evt.playerId &&
+      (e.time < evt.time || (e.time === evt.time && e.id <= evt.id))
+    ).length;
+    label = yellowsUpTo >= 2 ? '🟨🟨 2ª amarilla (expulsión)' : '🟨 Amarilla';
+  } else if (evt.type === 'red') {
+    label = '🟥 Roja directa';
+  } else if (evt.type === 'sub') {
+    isSub = true;
+    const pIn = evt.playerId ? getPlayer(evt.playerId) : null;
+    const pOut = evt.playerOutId ? getPlayer(evt.playerOutId) : null;
+    const inTxt = pIn ? escapeHtml(displayName(pIn)) : '(hueco)';
+    const outTxt = pOut ? escapeHtml(displayName(pOut)) : '(hueco)';
+    label = `🔄 ${outTxt} → ${inTxt}`;
+  } else if (evt.type === 'penalty') {
+    const sideTxt = evt.side === 'for' ? '⚡ Favor' : '🛑 Contra';
+    let resTxt = evt.result === 'gol' ? '⚽ Gol'
+              : evt.result === 'parada' ? '🧤 Parada'
+              : '❌ Fallo';
+    const foulTxt = evt.accumulatesFoul ? ' +falta' : '';
+    const prefix = evt.doublePenalty ? '🥅🥅 Doble pen.' : '🥅 Pen.';
+    label = `${prefix} ${sideTxt} · ${resTxt}${foulTxt}`;
+  }
+
+  // Marks column (small icon-y flags). Kept short so it doesn't crowd the row.
+  const marks = [];
+  if (evt.juego5For) marks.push('<span class="j5-mark for" title="Juego de 5 a favor">5⚡</span>');
+  else if (evt.juego5Against) marks.push('<span class="j5-mark against" title="Contra 5">5🛡️</span>');
+  if (evt.atkDef) {
+    if (evt.type === 'sub' && evt.atkDefSwap) {
+      marks.push('<span class="atkdef-mark" title="Swap rápido de pareja">SWAP</span>');
+    } else {
+      marks.push('<span class="atkdef-mark" title="Modo Ataque/Defensa activo">A/D</span>');
+    }
+  }
+  if (typeof evt.videoTime === 'number') {
+    const vm = Math.floor(evt.videoTime / 60);
+    const vs = Math.floor(evt.videoTime % 60);
+    marks.push(`<span class="event-videotime" title="🎥 tiempo vídeo">🎥 ${String(vm).padStart(2,'0')}:${String(vs).padStart(2,'0')}</span>`);
+  }
+
+  // Player column: only shown for non-sub events (subs already name people in their label)
+  const playerCell = isSub ? '' : (player ? escapeHtml(displayName(player)) : '');
+
+  return `<tr class="${isSub ? 'sub-row' : ''}">
+    <td class="col-time"><span data-evt-time="${evt.id}" style="cursor:pointer; text-decoration:underline dotted;" title="Tocar para corregir el tiempo">${periodLabel} ${formatCountdown(evt.time)}</span></td>
+    <td class="col-type">${label}</td>
+    <td class="col-player">${playerCell}</td>
+    <td class="col-marks">${marks.join(' ')}</td>
+    <td class="col-actions">
+      <button class="event-edit" data-id="${evt.id}" title="Editar">✏️</button>
+      <button class="event-undo del" data-id="${evt.id}" title="Deshacer">↩</button>
+    </td>
+  </tr>`;
 }
 
 // Build a single event row element (used by both logs).
