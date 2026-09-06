@@ -1705,16 +1705,12 @@
           <button class="btn btn-success clock-action-btn" id="playPauseBtn">▶<span>Play</span></button>
         </div>
 
-        <!-- CENTER: J5 + possession + scoreboard + possession + J5 -->
+        <!-- CENTER: J5 + scoreboard + J5 -->
         <div class="topbar-center">
           <div class="side-controls">
             <button class="j5-side-btn" id="juego5ForBtn" title="Juego de 5 a favor (atacamos en superioridad)">
               <span class="j5-side-label">J5</span>
               <span class="j5-side-team">Nosotros</span>
-            </button>
-            <button class="poss-mini poss-for" id="possForBtn" title="Posesión nuestra (+1)">
-              <span class="poss-mini-count" id="possForCount">0</span>
-              <span class="poss-mini-label">Pos.</span>
             </button>
           </div>
           <div class="scoreboard">
@@ -1731,10 +1727,6 @@
             </div>
           </div>
           <div class="side-controls">
-            <button class="poss-mini poss-against" id="possAgainstBtn" title="Posesión rival (+1)">
-              <span class="poss-mini-count" id="possAgainstCount">0</span>
-              <span class="poss-mini-label">Pos.</span>
-            </button>
             <button class="j5-side-btn" id="juego5AgainstBtn" title="Juego de 5 en contra (defendemos en inferioridad)">
               <span class="j5-side-label">J5</span>
               <span class="j5-side-team">Rival</span>
@@ -1742,11 +1734,12 @@
           </div>
         </div>
 
-        <!-- RIGHT: period info -->
+        <!-- RIGHT: period info + live stats -->
         <div class="topbar-right">
           <div class="period" id="periodLabel">1ª Parte</div>
           <button class="btn btn-ghost" id="endPeriodBtn">Fin parte</button>
           <button class="btn btn-ghost" id="clockModeBtn" title="Cambiar modo del reloj (cuenta atrás / tiempo corrido)" style="font-size:11px; padding:4px 8px;">⏱ Cuenta atrás</button>
+          <button class="btn btn-primary" id="liveStatsBtn" title="Ver estadísticas del partido en vivo" style="font-size:11px; padding:4px 8px;">📊 Stats</button>
         </div>
       </div>
 
@@ -1798,21 +1791,15 @@
                 <button class="action-btn small card-red" id="cardRedBtn"><span class="action-icon">🟥</span><span class="action-label">Roja</span></button>
               </div>
               <button class="action-btn" data-type="foul"><span class="action-icon">⚠️</span><span class="action-label">Falta</span></button>
-              <!-- Row 4: Duelos -->
-              <button class="action-btn" id="duelBtn" style="grid-column: 1 / -1; border-color:#8b5cf6;"><span class="action-icon">⚔️</span><span class="action-label">Duelos</span></button>
+              <!-- Row 4: Penalti + Duelos -->
+              <button class="action-btn" id="penaltyBtn" style="border-color:#dc2626;"><span class="action-icon">🥅</span><span class="action-label">Penalti</span></button>
+              <button class="action-btn" id="duelBtn" style="grid-column: 2 / -1; border-color:#8b5cf6;"><span class="action-icon">⚔️</span><span class="action-label">Duelos</span></button>
             </div>
           </div>
 
-          <div class="events-split">
-            <div class="panel">
-              <div class="panel-title">Eventos</div>
-              <div class="event-log" id="eventLog"></div>
-            </div>
-            <div class="panel">
-              <div class="panel-title">Posesión</div>
-              <div class="poss-live" id="possLive"></div>
-              <div class="event-log" id="possessionLog"></div>
-            </div>
+          <div class="panel">
+            <div class="panel-title">Eventos</div>
+            <div class="event-log" id="eventLog"></div>
           </div>
         </div>
       </div>
@@ -1884,10 +1871,6 @@
   </div>
 
   <div style="padding: 0 16px 16px;">
-    <div class="panel" id="possessionPanel" style="margin-bottom:12px;">
-      <div class="panel-title">Posesión</div>
-      <div id="possessionSummary"></div>
-    </div>
     <div class="panel" id="statsTablePanel">
       <div class="panel-title" id="statsTablePanelTitle">Estadísticas</div>
       <div style="overflow-x: auto;">
@@ -2183,6 +2166,156 @@
   </div>
 </div>
 
+<!-- ===== LIVE MATCH STATS MODAL (in-match: team / player breakdown) ===== -->
+<div class="modal-backdrop" id="liveStatsModal" style="display:none;">
+  <div class="modal" style="max-width:980px; width:96vw; max-height:92vh; display:flex; flex-direction:column;">
+    <div class="modal-title">
+      <span>📊 Estadísticas del partido en vivo</span>
+      <button class="btn btn-ghost" id="closeLiveStatsModal">✕</button>
+    </div>
+
+    <!-- Two toggles: Equipo vs Jugador, and 1ªP / 2ªP / Total -->
+    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+      <div class="chip-row" id="liveStatsScope">
+        <button class="filter-chip active" data-livescope="team">Equipo</button>
+        <button class="filter-chip" data-livescope="player">Jugador</button>
+      </div>
+      <div style="width:1px; height:24px; background:#dde3ea;"></div>
+      <div class="chip-row" id="liveStatsPeriod">
+        <button class="filter-chip" data-liveperiod="1">1ª Parte</button>
+        <button class="filter-chip" data-liveperiod="2">2ª Parte</button>
+        <button class="filter-chip active" data-liveperiod="all">Total</button>
+      </div>
+    </div>
+
+    <div id="liveStatsBody" style="overflow:auto; flex:1; min-height:200px;">
+      <!-- populated by renderLiveStatsModal() -->
+    </div>
+  </div>
+</div>
+
+<!-- ===== CHRONICLE MODAL (post-match WhatsApp summary) ===== -->
+<div class="modal-backdrop" id="chronicleModal" style="display:none;">
+  <div class="modal" style="max-width:640px; width:96vw; max-height:92vh; display:flex; flex-direction:column;">
+    <div class="modal-title">
+      <span id="chronicleTitle">📱 Crónica</span>
+      <button class="btn btn-ghost" id="closeChronicleModal">✕</button>
+    </div>
+
+    <!-- MVP picker row: choose from convocados (or full roster fallback) -->
+    <div style="display:flex; gap:8px; align-items:end; margin-bottom:10px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:200px;">
+        <label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">MVP del partido</label>
+        <select id="chronicleMvpSelect" class="form-input" style="width:100%;"></select>
+      </div>
+      <button class="btn btn-primary" id="chronicleSaveMvpBtn">Guardar MVP</button>
+    </div>
+
+    <!-- The generated text. Editable so Toni can tweak before sharing. -->
+    <label style="display:block; font-size:11px; text-transform:uppercase; color:#5b6776; font-weight:700; margin-bottom:4px;">Texto para WhatsApp</label>
+    <textarea id="chronicleText" style="width:100%; flex:1; min-height:280px; font-family: 'Consolas', 'Courier New', monospace; font-size:13px; padding:10px; border:1px solid #dde3ea; border-radius:8px; resize:vertical;"></textarea>
+
+    <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+      <button class="btn btn-ghost" id="chronicleRefreshBtn" title="Regenera el texto (por si has cambiado el MVP o quieres volver al original)">↻ Regenerar</button>
+      <button class="btn btn-primary" id="chronicleCopyBtn" style="flex:1;">📋 Copiar al portapapeles</button>
+    </div>
+    <div style="font-size:11px; color:#64748b; margin-top:8px;">
+      Puedes editar el texto directamente antes de copiarlo. La línea <b>Crónica &gt;</b> se deja tal cual para que la rellenes tú.
+    </div>
+  </div>
+</div>
+
+<!-- ===== PENALTY PICKER MODAL ===== -->
+<div class="modal-backdrop" id="penaltyModal" style="display:none;">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-title">
+      <span id="penaltyModalTitle">🥅 Penalti</span>
+      <button class="btn btn-ghost" id="closePenaltyModal">✕</button>
+    </div>
+
+    <!-- Step 1: side -->
+    <div id="penStepSide">
+      <div style="font-size:12px; color:#5b6776; margin-bottom:10px;">1. ¿Penalti a favor o en contra?</div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <button class="btn" data-penside="for"  style="background:#dcfce7; color:#15803d; border:2px solid #16a34a; padding:18px; font-weight:700;">⚡ A FAVOR<br><span style="font-size:11px; font-weight:500;">Nos hacen penalti</span></button>
+        <button class="btn" data-penside="against" style="background:#fee2e2; color:#b91c1c; border:2px solid #dc2626; padding:18px; font-weight:700;">🛑 EN CONTRA<br><span style="font-size:11px; font-weight:500;">Nosotros hacemos penalti</span></button>
+      </div>
+    </div>
+
+    <!-- Step 2: does it accumulate as a foul? -->
+    <div id="penStepFoul" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div style="font-size:12px; color:#5b6776;">2. ¿Acumula falta al equipo?</div>
+        <button class="btn btn-ghost btn-tiny" id="penBackFoul">← Volver</button>
+      </div>
+      <div id="penFoulHint" style="font-size:11px; color:#64748b; margin-bottom:10px;"></div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <button class="btn" data-penfoul="1" style="background:#fef3c7; color:#78350f; border:2px solid #f59e0b; padding:14px; font-weight:700;">SÍ acumula falta</button>
+        <button class="btn" data-penfoul="0" style="background:#f1f5f9; color:#334155; border:2px solid #94a3b8; padding:14px; font-weight:700;">NO acumula falta</button>
+      </div>
+    </div>
+
+    <!-- Step 3a (for=A FAVOR): who provoked? -->
+    <div id="penStepProvoker" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div style="font-size:12px; color:#5b6776;">3. ¿Quién lo provoca? (jugador en pista)</div>
+        <button class="btn btn-ghost btn-tiny" id="penBackProvoker">← Volver</button>
+      </div>
+      <div id="penProvokerList" class="player-grid"></div>
+    </div>
+
+    <!-- Step 4a (for=A FAVOR): who takes the shot? -->
+    <div id="penStepShooter" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div style="font-size:12px; color:#5b6776;">4. ¿Quién lo chuta? (jugador en pista)</div>
+        <button class="btn btn-ghost btn-tiny" id="penBackShooter">← Volver</button>
+      </div>
+      <div id="penShooterList" class="player-grid"></div>
+    </div>
+
+    <!-- Step 3b (against=EN CONTRA): who committed the foul? -->
+    <div id="penStepFouled" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div style="font-size:12px; color:#5b6776;">3. ¿Quién comete el penalti? (jugador en pista)</div>
+        <button class="btn btn-ghost btn-tiny" id="penBackFouled">← Volver</button>
+      </div>
+      <div id="penFouledList" class="player-grid"></div>
+    </div>
+
+    <!-- Step 4b (against=EN CONTRA): who's our goalkeeper on the play? -->
+    <div id="penStepGK" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div style="font-size:12px; color:#5b6776;">4. ¿Quién es el portero en el penalti?</div>
+        <button class="btn btn-ghost btn-tiny" id="penBackGK">← Volver</button>
+      </div>
+      <div id="penGKList" class="player-grid"></div>
+    </div>
+
+    <!-- Step 5 (common): result -->
+    <div id="penStepResult" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div style="font-size:12px; color:#5b6776;">5. Resultado del penalti</div>
+        <button class="btn btn-ghost btn-tiny" id="penBackResult">← Volver</button>
+      </div>
+      <div id="penResultSummary" style="padding:8px 12px; background:#f1f5f9; border-radius:6px; font-size:12px; margin-bottom:10px;"></div>
+      <div class="result-grid">
+        <button class="result-btn result-fuera" data-penresult="fuera">
+          <span class="result-icon">🚫</span>
+          <span class="result-label">Fuera / Fallado</span>
+        </button>
+        <button class="result-btn result-parada" data-penresult="parada">
+          <span class="result-icon">🧤</span>
+          <span class="result-label">Parada</span>
+        </button>
+        <button class="result-btn result-gol" data-penresult="gol">
+          <span class="result-icon">⚽</span>
+          <span class="result-label">Gol</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== DUEL PICKER MODAL ===== -->
 <div class="modal-backdrop" id="duelModal" style="display:none;">
   <div class="modal" style="max-width:520px;">
@@ -2381,6 +2514,7 @@
 
       <div style="display:flex; gap:8px; margin-top:6px;">
         <button class="btn btn-ghost" id="editEvtCancel" style="flex:1;">Cancelar</button>
+        <button class="btn btn-ghost" id="editEvtInsert" style="flex:1.5; border-color:#0891b2; color:#0e7490;" title="Añadir una nueva acción justo después de esta">➕ Insertar acción debajo</button>
         <button class="btn btn-primary" id="editEvtSave" style="flex:2;">Guardar cambios</button>
       </div>
     </div>
@@ -2430,8 +2564,6 @@ function createNewMatch() {
     status: 'active',
     juego5For: false,     // we attack with goalkeeper-as-outfield (our power play)
     juego5Against: false, // opponent attacks 5, we defend in inferiority
-    possessions: [],      // [{team:'for'|'against', period, durationSec}]
-    possActive: null,     // currently running possession: {team, durationSec} or null
     sanctions: [],        // active sanctions: [{id, playerId, remainingSec, label}]
     expelledPlayers: [],  // ids of players sent off (cannot return this match)
     events: [],
@@ -2587,6 +2719,7 @@ function stripMatchForDB(match) {
     periodLength: match.periodLength || PERIOD_LENGTH_SECONDS,
     sanctions: (match.sanctions || []).map(s => ({...s})),
     expelledPlayers: [...(match.expelledPlayers || [])],
+    mvpPlayerId: match.mvpPlayerId || null,   // for the WhatsApp chronicle
   };
 }
 
@@ -2736,10 +2869,6 @@ async function loadState() {
       state.match.juego5For = !!state.match.juego5;
     }
     if (typeof state.match.juego5Against !== 'boolean') state.match.juego5Against = false;
-    if (typeof state.match.possFor !== 'number') state.match.possFor = 0;
-    if (typeof state.match.possAgainst !== 'number') state.match.possAgainst = 0;
-    if (!Array.isArray(state.match.possessions)) state.match.possessions = [];
-    if (state.match.possActive === undefined) state.match.possActive = null;
     if (!Array.isArray(state.match.sanctions)) state.match.sanctions = [];
     if (!Array.isArray(state.match.expelledPlayers)) state.match.expelledPlayers = [];
     if (!state.match.clockMode) state.match.clockMode = 'countdown';
@@ -3281,15 +3410,70 @@ function getPlayerCurrentStintSeconds(pid) {
 // the current stint as well.
 function getPlayerRotationsCount(pid) {
   const s = state.match.subs[pid];
-  if (!s) return 0;
+  return countRotationsFromSub(s);
+}
+
+// Generic rotation counter that works on any sub-record shape (both live
+// state.match.subs[pid] and the records loaded from IndexedDB via
+// loadMatchData). Counts every entry in `history` that has an `in` field:
+// each represents one time the player took the court. Returns 0 if the sub
+// record is missing or has no history.
+function countRotationsFromSub(s) {
+  if (!s || !Array.isArray(s.history)) return 0;
   let count = 0;
-  if (Array.isArray(s.history)) {
-    for (const entry of s.history) if ('in' in entry) count++;
-  }
-  // If they're currently on court and the last entry wasn't recorded in history yet
-  // (periodIn open), it's already been recorded in history when they entered, so
-  // no extra count is needed. The starting 5 of a period get a history entry too.
+  for (const entry of s.history) if ('in' in entry) count++;
   return count;
+}
+
+// Count rotations for a player in a specific period (1 or 2), or across all if null.
+// Used by the in-match live stats modal for per-period breakdowns.
+function countRotationsFromSubForPeriod(s, period) {
+  if (!s || !Array.isArray(s.history)) return 0;
+  if (period == null) return countRotationsFromSub(s);
+  let count = 0;
+  for (const entry of s.history) {
+    if ('in' in entry && entry.period === period) count++;
+  }
+  return count;
+}
+
+// Compute total seconds played by a player in a specific period (1 or 2), or
+// across all periods if period is null. Walks the history entries, pairing
+// `in` with the next `out` in the same period. If we're inside the active
+// match and the last stint is still open (no `out` yet), it uses the current
+// live clock or the period buzzer as the closing point.
+function computePlayerSecondsForPeriod(s, period, isActiveMatch) {
+  if (!s || !Array.isArray(s.history)) {
+    // Legacy sub with no history — best we can do is return totalSeconds
+    // for `all`, and nothing per-period.
+    if (period == null) return s?.totalSeconds || 0;
+    return 0;
+  }
+  let total = 0;
+  let openIn = null;      // seconds at which we entered the pitch
+  let openPeriod = null;  // which period that stint belongs to
+  for (const entry of s.history) {
+    if ('in' in entry) {
+      openIn = entry.in;
+      openPeriod = entry.period;
+    } else if ('out' in entry && openIn != null) {
+      if (period == null || openPeriod === period) {
+        total += Math.max(0, entry.out - openIn);
+      }
+      openIn = null;
+      openPeriod = null;
+    }
+  }
+  // Handle an unclosed stint (still on court)
+  if (openIn != null && (period == null || openPeriod === period)) {
+    if (isActiveMatch && state.match && openPeriod === state.match.timer.period) {
+      total += Math.max(0, currentMatchSeconds() - openIn);
+    } else {
+      // Stint was left open in a period that has since ended → close at buzzer
+      total += Math.max(0, matchPeriodLength() - openIn);
+    }
+  }
+  return total;
 }
 
 // ============================================================
@@ -3646,12 +3830,13 @@ function handleResultPick(result) {
 }
 
 async function logAction(type, playerId, extra = {}) {
+  const {time, period} = getEventTimeAndPeriod();
   const evt = {
     id: 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
     matchId: state.match.id,
     type, playerId,
-    time: currentMatchSeconds(),
-    period: state.match.timer.period,
+    time,
+    period,
     onCourt: [...state.match.onCourt],
     juego5For: !!state.match.juego5For,
     juego5Against: !!state.match.juego5Against,
@@ -3665,11 +3850,13 @@ async function logAction(type, playerId, extra = {}) {
     state.match.scoreFor++;
     await saveCurrentMatch();
   }
+  finishInsertMode();
   renderAll();
 }
 
 // Opponent chance: result decides what we store and whether score changes.
 async function logOpponentChance(result) {
+  const {time, period} = getEventTimeAndPeriod();
   const evt = {
     id: 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
     matchId: state.match.id,
@@ -3677,8 +3864,8 @@ async function logOpponentChance(result) {
     // Always record the goalkeeper on court (slot 0), regardless of the result,
     // so the GK is attributed every opponent chance (fuera / parada / gol).
     playerId: state.match.onCourt[0] || null,
-    time: currentMatchSeconds(),
-    period: state.match.timer.period,
+    time,
+    period,
     onCourt: [...state.match.onCourt],
     juego5For: !!state.match.juego5For,
     juego5Against: !!state.match.juego5Against,
@@ -3697,172 +3884,91 @@ async function logOpponentChance(result) {
   state.match.events.push(evt);
   await saveEvent(evt);
   await saveCurrentMatch();
+  finishInsertMode();
   renderAll();
 }
 
 // Opponent foul: single tap, no player.
 async function logOpponentFoul() {
+  const {time, period} = getEventTimeAndPeriod();
   const evt = {
     id: 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
     matchId: state.match.id,
     type: 'opp_foul',
     playerId: null,
-    time: currentMatchSeconds(),
-    period: state.match.timer.period,
+    time,
+    period,
     onCourt: [...state.match.onCourt],
     juego5For: !!state.match.juego5For,
     juego5Against: !!state.match.juego5Against,
   };
   state.match.events.push(evt);
   await saveEvent(evt);
+  finishInsertMode();
   renderAll();
 }
 
-// Possession is event-based now; nothing to close. Kept for call-site safety.
+// Kept as no-op for backwards compatibility with old call sites.
 function closeActivePossessionIfAny() { /* no-op */ }
 
 // ============================================================
-// POSSESSION (event-based)
+// INSERT MODE (event insertion between two existing events)
 // ============================================================
-// Each tap registers a possession event. The duration of a possession is the
-// elapsed time until the next possession event (or the end of the period).
-// `j5` marks whether this possession is a power play (the team in possession
-// is playing with the goalkeeper-outfield / 5 attackers).
-async function switchPossession(team, j5 = false) {
-  // If possession goes to a team, the other team can't be in power play anymore.
-  // And the team gaining possession is only "j5" if explicitly flagged.
-  if (team === 'for') {
-    state.match.juego5Against = false;
-    if (!j5) state.match.juego5For = false;
-    else state.match.juego5For = true;
-  } else {
-    state.match.juego5For = false;
-    if (!j5) state.match.juego5Against = false;
-    else state.match.juego5Against = true;
-  }
-  const evt = {
-    id: 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
-    matchId: state.match.id,
-    type: 'possession',
-    team,                       // 'for' | 'against'
-    j5: !!j5,                   // was this possession a 5-attacker power play
-    playerId: null,
-    time: currentMatchSeconds(),
-    period: state.match.timer.period,
-    onCourt: [...state.match.onCourt],
-    juego5For: !!state.match.juego5For,
-    juego5Against: !!state.match.juego5Against,
+// When the user hits "Insertar debajo" in the event editor, this override is
+// set to the reference event's {time, period} + a small offset. The next
+// action-creating flow reads it via getEventTimeAndPeriod() instead of the
+// live clock, then finishInsertMode() clears it. Applies to logAction,
+// logOpponentFoul, logCard (including its auto-foul child), the opp_chance
+// result flow, logDuel, and logPenalty.
+let insertModeOverride = null;
+function startInsertMode(refEvt) {
+  // Insert 1 second after the reference in the same period. Clamped to the
+  // period end so we don't spill past 20:00.
+  const pl = matchPeriodLength();
+  const newTime = Math.min(pl, (refEvt.time || 0) + 1);
+  insertModeOverride = {
+    time: newTime,
+    period: refEvt.period || 1,
   };
-  state.match.events.push(evt);
-  await saveEvent(evt);
-  await saveCurrentMatch();
-  renderAll();
+}
+function getEventTimeAndPeriod() {
+  if (insertModeOverride) {
+    // Return a copy so callers can't mutate the override
+    return { time: insertModeOverride.time, period: insertModeOverride.period };
+  }
+  return { time: currentMatchSeconds(), period: state.match.timer.period };
+}
+function finishInsertMode() {
+  insertModeOverride = null;
+  // Also clear the visual "insert mode" banner (if any) so the user knows
+  // the flow is complete.
+  const label = document.getElementById('actionPrompt');
+  if (label && label.innerHTML.includes('Modo insertar')) {
+    label.innerHTML = '';
+  }
 }
 
-// Returns the current (last) possession event, or null.
-function currentPossession() {
-  const poss = state.match.events.filter(e => e.type === 'possession');
-  return poss.length ? poss[poss.length - 1] : null;
-}
-
-// Toggle "Juego de 5" for a side, applying the possession logic:
-//  - Activating one side turns the other OFF (only one team plays 5 at a time).
-//  - 'for'  → power play means WE have the ball.
-//  - 'against' → power play means THEY have the ball.
-// If the active possession already belongs to that team, just mark it as j5.
-// Otherwise, close the current possession and open a new one for that team (j5=true).
+// ============================================================
+// JUEGO DE 5 (J5)
+// ============================================================
+// J5 is now a simple toggle: it flips a flag on state.match that gets copied
+// into every subsequent action event as `juego5For` / `juego5Against`. This
+// lets stats/filters know which actions happened during a power-play phase.
+// No possession events are created — that whole subsystem was removed.
+// Only one side can be in J5 at a time (activating one turns the other off).
 async function setJuego5(side) {
   const m = state.match;
   if (!m) return;
   const turningOn = (side === 'for') ? !m.juego5For : !m.juego5Against;
-
   if (turningOn) {
-    // Only one side can be in power play
     m.juego5For = (side === 'for');
     m.juego5Against = (side === 'against');
-    const team = (side === 'for') ? 'for' : 'against';
-    const cur = currentPossession();
-    if (cur && cur.team === team) {
-      // Same team already has the ball → just mark current possession as j5
-      cur.j5 = true;
-      await saveEvent(cur);
-      await saveCurrentMatch();
-      renderAll();
-    } else {
-      // Open a new possession for that team, marked as power play
-      await switchPossession(team, true);
-    }
   } else {
-    // Turning OFF: just clear the flag. Possession continues as-is (no longer j5).
     if (side === 'for') m.juego5For = false;
     else m.juego5Against = false;
-    await saveCurrentMatch();
-    renderAll();
   }
-}
-
-// Compute possession stats from possession events.
-// Duration of each possession = time until next possession event in same period,
-// or until end of period (PERIOD_LENGTH_SECONDS) for the last one.
-function computePossessionStats() {
-  if (!state.match) return {forCount:0,againstCount:0,forTime:0,againstTime:0,forAvg:0,againstAvg:0,forPct:0,againstPct:0};
-  const evts = state.match.events
-    .filter(e => e.type === 'possession')
-    .sort((a, b) => (a.period - b.period) || (a.time - b.time));
-
-  let forCount = 0, againstCount = 0, forTime = 0, againstTime = 0;
-  for (let i = 0; i < evts.length; i++) {
-    const e = evts[i];
-    const next = evts[i + 1];
-    let end;
-    if (next && next.period === e.period) {
-      end = next.time;
-    } else {
-      // last possession of this period → until the buzzer, but cap at current time
-      // if this is the live period
-      const periodEnd = matchPeriodLength();
-      if (e.period === state.match.timer.period) {
-        end = Math.min(currentMatchSeconds(), periodEnd);
-      } else {
-        end = periodEnd;
-      }
-    }
-    const dur = Math.max(0, end - e.time);
-    if (e.team === 'for') { forCount++; forTime += dur; }
-    else { againstCount++; againstTime += dur; }
-  }
-  const totalTime = forTime + againstTime;
-  return {
-    forCount, againstCount, forTime, againstTime,
-    forAvg: forCount ? forTime / forCount : 0,
-    againstAvg: againstCount ? againstTime / againstCount : 0,
-    forPct: totalTime ? Math.round(forTime / totalTime * 100) : 0,
-    againstPct: totalTime ? Math.round(againstTime / totalTime * 100) : 0,
-  };
-}
-
-function renderPossessionSummary() {
-  const el = document.getElementById('possessionSummary');
-  if (!el) return;
-  const ps = computePossessionStats();
-  if (ps.forCount === 0 && ps.againstCount === 0) {
-    el.innerHTML = '<div style="color:#64748b; font-size:13px;">Sin posesiones registradas. Usa los botones de posesión de la barra superior.</div>';
-    return;
-  }
-  el.innerHTML = `
-    <div class="poss-summary">
-      <div class="poss-summary-bar">
-        <div class="poss-bar-for" style="width:${ps.forPct}%">${ps.forPct}%</div>
-        <div class="poss-bar-against" style="width:${ps.againstPct}%">${ps.againstPct}%</div>
-      </div>
-      <table class="poss-summary-table">
-        <tr><th></th><th>Nosotros</th><th>Rival</th></tr>
-        <tr><td>Posesiones</td><td>${ps.forCount}</td><td>${ps.againstCount}</td></tr>
-        <tr><td>Tiempo total</td><td>${formatTime(ps.forTime)}</td><td>${formatTime(ps.againstTime)}</td></tr>
-        <tr><td>Media/posesión</td><td>${formatTime(ps.forAvg)}</td><td>${formatTime(ps.againstAvg)}</td></tr>
-      </table>
-    </div>
-  `;
+  await saveCurrentMatch();
+  renderAll();
 }
 
 // ============================================================
@@ -3881,13 +3987,17 @@ function playerYellowCount(playerId) {
 
 // Register a card. cardType: 'yellow' | 'red'. context: 'court' | 'bench' | 'staff'
 async function logCard(cardType, personId, context) {
+  // Insert-mode aware: if we're inserting, both the card AND any auto-generated
+  // foul (bench yellow) share the same overridden {time, period}. Read once,
+  // reuse for both, then finishInsertMode() at the end.
+  const tp = getEventTimeAndPeriod();
   const evt = {
     id: 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
     matchId: state.match.id,
     type: cardType,
     playerId: personId,
-    time: currentMatchSeconds(),
-    period: state.match.timer.period,
+    time: tp.time,
+    period: tp.period,
     onCourt: [...state.match.onCourt],
     juego5For: !!state.match.juego5For,
     juego5Against: !!state.match.juego5Against,
@@ -3905,8 +4015,8 @@ async function logCard(cardType, personId, context) {
         matchId: state.match.id,
         type: 'foul',
         playerId: personId,
-        time: currentMatchSeconds(),
-        period: state.match.timer.period,
+        time: tp.time,
+        period: tp.period,
         onCourt: [...state.match.onCourt],
         juego5For: !!state.match.juego5For,
         juego5Against: !!state.match.juego5Against,
@@ -3933,6 +4043,7 @@ async function logCard(cardType, personId, context) {
   }
 
   await saveCurrentMatch();
+  finishInsertMode();
   renderAll();
 }
 
@@ -4041,13 +4152,14 @@ function goToDuelPlayerStep(kind) {
 
 async function logDuel(kind, playerId) {
   if (!kind || !playerId) return;
+  const {time, period} = getEventTimeAndPeriod();
   const evt = {
     id: 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
     matchId: state.match.id,
     type: kind, // e.g. 'duel_off_won'
     playerId,
-    time: currentMatchSeconds(),
-    period: state.match.timer.period,
+    time,
+    period,
     onCourt: [...state.match.onCourt],
     juego5For: !!state.match.juego5For,
     juego5Against: !!state.match.juego5Against,
@@ -4056,7 +4168,407 @@ async function logDuel(kind, playerId) {
   await saveEvent(evt);
   await saveCurrentMatch();
   closeDuelModal();
+  finishInsertMode();
   renderAll();
+}
+
+// ============================================================
+// PENALTY (multi-step wizard: side → foul → provoker/fouled → shooter/GK → result)
+// ============================================================
+// State machine kept in a single object so we can back-navigate cleanly.
+let penaltyWizard = null;
+
+function openPenaltyPicker() {
+  // Warn if fewer than 5 on court, same as other actions.
+  const playing = state.match.onCourt.filter(Boolean).length;
+  if (playing < 5) {
+    if (!confirm(`Solo hay ${playing}/5 jugadores en pista. ¿Registrar el penalti igualmente?`)) return;
+  }
+  penaltyWizard = {
+    side: null,           // 'for' | 'against'
+    accumulatesFoul: null,// true | false
+    provokerId: null,     // 'for' only
+    shooterId: null,      // 'for' only
+    fouledId: null,       // 'against' only
+    gkId: null,           // 'against' only
+    result: null,         // 'gol' | 'parada' | 'fuera'
+  };
+  showPenaltyStep('side');
+  document.getElementById('penaltyModal').style.display = 'flex';
+}
+function closePenaltyPicker() {
+  penaltyWizard = null;
+  document.getElementById('penaltyModal').style.display = 'none';
+}
+
+// Show a single step, hide the rest. Called every time we advance/rewind.
+function showPenaltyStep(step) {
+  const stepIds = ['penStepSide', 'penStepFoul', 'penStepProvoker', 'penStepShooter', 'penStepFouled', 'penStepGK', 'penStepResult'];
+  stepIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  document.getElementById('penStep' + step[0].toUpperCase() + step.slice(1)).style.display = '';
+
+  // Populate content per step
+  if (step === 'foul') {
+    const hint = document.getElementById('penFoulHint');
+    if (penaltyWizard.side === 'for') {
+      hint.textContent = 'A favor: si acumula, cuenta como una falta más para el rival.';
+    } else {
+      hint.textContent = 'En contra: si acumula, cuenta como una falta más para nosotros (podría llegar al doble penalti).';
+    }
+  }
+  if (step === 'provoker' || step === 'shooter' || step === 'fouled' || step === 'gk') {
+    const listId = 'pen' + step[0].toUpperCase() + step.slice(1) + 'List';
+    renderPenaltyPlayerGrid(listId, step);
+  }
+  if (step === 'result') {
+    // Summary of everything picked so far
+    const el = document.getElementById('penResultSummary');
+    const parts = [];
+    parts.push(penaltyWizard.side === 'for' ? '⚡ A FAVOR' : '🛑 EN CONTRA');
+    parts.push(penaltyWizard.accumulatesFoul ? 'con falta' : 'sin falta');
+    if (penaltyWizard.side === 'for') {
+      const prov = getPlayer(penaltyWizard.provokerId);
+      const shoot = getPlayer(penaltyWizard.shooterId);
+      if (prov) parts.push(`Provoca: ${displayName(prov)}`);
+      if (shoot) parts.push(`Chuta: ${displayName(shoot)}`);
+    } else {
+      const foul = getPlayer(penaltyWizard.fouledId);
+      const gk = getPlayer(penaltyWizard.gkId);
+      if (foul) parts.push(`Comete: ${displayName(foul)}`);
+      if (gk) parts.push(`Portero: ${displayName(gk)}`);
+    }
+    el.textContent = parts.join(' · ');
+  }
+}
+
+// Render a player picker grid inside one of the penalty modal steps.
+// `step` decides which wizard field the click writes to.
+function renderPenaltyPlayerGrid(listId, step) {
+  const list = document.getElementById(listId);
+  if (!list) return;
+  const onCourtIds = state.match.onCourt.filter(Boolean);
+  const players = onCourtIds.map(pid => getPlayer(pid)).filter(Boolean);
+  if (players.length === 0) {
+    list.innerHTML = '<div style="grid-column:1/-1; padding:20px; text-align:center; color:#5b6776;">Nadie en pista.</div>';
+    return;
+  }
+  list.innerHTML = players.map(p => {
+    const gkCls = state.match.onCourt[0] === p.id ? ' gk' : '';
+    return `<button class="player-card${gkCls}" data-penpick="${p.id}">
+      <div class="player-num">${p.number ?? '·'}</div>
+      <div class="player-name-card">${escapeHtml(displayName(p))}</div>
+    </button>`;
+  }).join('');
+  list.querySelectorAll('[data-penpick]').forEach(b => {
+    b.addEventListener('click', () => handlePenaltyPick(step, b.dataset.penpick));
+  });
+}
+
+function handlePenaltyPick(step, playerId) {
+  if (!penaltyWizard) return;
+  if (step === 'provoker') {
+    penaltyWizard.provokerId = playerId;
+    showPenaltyStep('shooter');
+  } else if (step === 'shooter') {
+    penaltyWizard.shooterId = playerId;
+    showPenaltyStep('result');
+  } else if (step === 'fouled') {
+    penaltyWizard.fouledId = playerId;
+    showPenaltyStep('gk');
+  } else if (step === 'gk') {
+    penaltyWizard.gkId = playerId;
+    showPenaltyStep('result');
+  }
+}
+
+// Commit the penalty as an event (and optionally an accompanying foul).
+async function logPenalty(result) {
+  if (!penaltyWizard || !penaltyWizard.side) return;
+  const w = penaltyWizard;
+  // Insert-mode-aware timestamp: read once, reuse for both the penalty and its
+  // optional companion foul, then finishInsertMode() at the end.
+  const tp = getEventTimeAndPeriod();
+  const evt = {
+    id: 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+    matchId: state.match.id,
+    type: 'penalty',
+    side: w.side,                       // 'for' | 'against'
+    accumulatesFoul: !!w.accumulatesFoul,
+    provokerId: w.side === 'for' ? w.provokerId : null,
+    shooterId:  w.side === 'for' ? w.shooterId  : null,
+    fouledId:   w.side === 'against' ? w.fouledId : null,
+    gkId:       w.side === 'against' ? w.gkId    : null,
+    // playerId is set so that events lists / undo can find the "main actor":
+    // shooter for a penalty in our favour, GK for a penalty against us.
+    playerId:   w.side === 'for' ? w.shooterId : w.gkId,
+    result,                             // 'fuera' | 'parada' | 'gol'
+    time: tp.time,
+    period: tp.period,
+    onCourt: [...state.match.onCourt],
+    juego5For: !!state.match.juego5For,
+    juego5Against: !!state.match.juego5Against,
+  };
+  state.match.events.push(evt);
+  await saveEvent(evt);
+
+  // Scoreboard update
+  if (result === 'gol') {
+    if (w.side === 'for') state.match.scoreFor++;
+    else {
+      state.match.scoreAgainst++;
+      // Same futsal rule as regular concessions: cancels the oldest active sanction.
+      if (state.match.sanctions.length > 0) {
+        state.match.sanctions.shift();
+        setTimeout(() => alert(`Inferioridad: puedes recuperar al 5º jugador (gol encajado en penalti cancela la sanción).`), 50);
+      }
+    }
+  }
+
+  // Optional companion foul event (only if the user said "sí acumula falta")
+  if (w.accumulatesFoul) {
+    const foulEvt = {
+      id: 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2,6) + '_pf',
+      matchId: state.match.id,
+      // A favor: rival commits a foul on us  → opp_foul (goes to their tally)
+      // En contra: our fouler commits a foul → foul (goes to our tally)
+      type: w.side === 'for' ? 'opp_foul' : 'foul',
+      playerId: w.side === 'for' ? null : w.fouledId,
+      time: tp.time,
+      period: tp.period,
+      onCourt: [...state.match.onCourt],
+      juego5For: !!state.match.juego5For,
+      juego5Against: !!state.match.juego5Against,
+      autoFromPenalty: true,
+    };
+    state.match.events.push(foulEvt);
+    await saveEvent(foulEvt);
+  }
+
+  await saveCurrentMatch();
+  closePenaltyPicker();
+  finishInsertMode();
+  renderAll();
+}
+
+// ============================================================
+// LIVE MATCH STATS MODAL
+// ============================================================
+// Two view scopes ('team' / 'player') and three period filters (1 / 2 / null=all).
+// All numbers come from the ACTIVE match only. Rendered on demand.
+const liveStatsState = { scope: 'team', period: null };
+
+async function openLiveStatsModal() {
+  if (!state.match) {
+    alert('No hay partido activo.');
+    return;
+  }
+  document.getElementById('liveStatsModal').style.display = 'flex';
+  await renderLiveStatsModal();
+}
+function closeLiveStatsModal() {
+  document.getElementById('liveStatsModal').style.display = 'none';
+}
+
+async function renderLiveStatsModal() {
+  // Sync chip highlights
+  document.querySelectorAll('#liveStatsScope .filter-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.livescope === liveStatsState.scope);
+  });
+  document.querySelectorAll('#liveStatsPeriod .filter-chip').forEach(c => {
+    const val = c.dataset.liveperiod === 'all' ? null : parseInt(c.dataset.liveperiod, 10);
+    c.classList.toggle('active', val === liveStatsState.period);
+  });
+
+  const body = document.getElementById('liveStatsBody');
+  const activeMatchObj = { id: state.match.id, isActive: true, periodLength: state.match.periodLength };
+
+  if (liveStatsState.scope === 'team') {
+    body.innerHTML = await buildLiveTeamHtml(activeMatchObj);
+  } else {
+    body.innerHTML = await buildLivePlayerHtml(activeMatchObj);
+  }
+}
+
+// Build the team comparison table for the currently-active period filter.
+async function buildLiveTeamHtml(activeMatchObj) {
+  const {us, them} = await computeTeamStats([activeMatchObj], liveStatsState.period, /*ignoreJ5Filter*/ true);
+  const row = (label, u, t) => `<tr><td class="team-metric">${label}</td><td class="team-us">${u}</td><td class="team-them">${t}</td></tr>`;
+  const goalsRow = `<tr><td class="team-metric">⚽ Goles</td><td class="team-us team-goals">${us.goals}</td><td class="team-them team-goals">${them.goals}</td></tr>`;
+  const periodTxt = liveStatsState.period == null ? 'Total del partido' :
+                    liveStatsState.period === 1 ? '1ª parte' : '2ª parte';
+  return `
+    <div style="font-size:12px; color:#5b6776; margin-bottom:8px;">${periodTxt} · datos del partido activo</div>
+    <table class="stats-table team-narrow" style="width:100%;">
+      <thead><tr><th style="text-align:left;">Métrica</th><th>Nosotros</th><th>Rival</th></tr></thead>
+      <tbody>
+        ${goalsRow}
+        ${row('O/G/P/F', `${us.chances}/${us.goals}/${us.chancesSaved}/${us.chancesOff}`, `${them.chances}/${them.goals}/${them.chancesSaved}/${them.chancesOff}`)}
+        ${row('Penaltis (G)', `${us.penalties} (${us.penaltiesGoals})`, `${them.penalties} (${them.penaltiesGoals})`)}
+        ${row('Recuperaciones', us.recoveries, '—')}
+        ${row('Pérdidas', us.losses, '—')}
+        ${row('Faltas', us.fouls, them.fouls)}
+        ${row('🟨 Amarillas', us.yellows, them.yellows)}
+        ${row('🟥 Rojas', us.reds, them.reds)}
+      </tbody>
+    </table>
+  `;
+}
+
+// Build the per-player table for the currently-active period filter.
+// Rotations and minutes are computed per-period from the sub history.
+async function buildLivePlayerHtml(activeMatchObj) {
+  const data = await loadMatchData(activeMatchObj.id, true);
+  const period = liveStatsState.period; // null | 1 | 2
+
+  // Aggregate per player, mirroring the fields shown in the main Stats table
+  // but scoped to the live match and to the selected period.
+  const byPlayer = {};
+  state.roster.forEach(p => {
+    ensurePlayerShape(p);
+    byPlayer[p.id] = {
+      id: p.id, name: p.name, alias: p.alias, number: p.number,
+      isGK: p.isGK,
+      minutes: 0, rotations: 0,
+      goals: 0, chances: 0, chancesOff: 0, chancesSaved: 0,
+      assistsGoal: 0, assistsNoGoal: 0,
+      recoveries: 0, losses: 0, fouls: 0,
+      yellows: 0, reds: 0,
+      saves: 0, oppChances: 0, oppGoals: 0, oppOff: 0,
+      gaBlame: 0,
+      duelOffWon: 0, duelOffLost: 0, duelDefWon: 0, duelDefLost: 0,
+    };
+  });
+
+  // Minutes + rotations (period-aware, use the helpers we added in fase 2)
+  for (const [pid, s] of Object.entries(data.subs)) {
+    if (!byPlayer[pid]) continue;
+    byPlayer[pid].minutes = computePlayerSecondsForPeriod(s, period, true);
+    byPlayer[pid].rotations = countRotationsFromSubForPeriod(s, period);
+  }
+
+  // Events (filtered by period, no J5 filter in-match)
+  const evts = period == null ? data.events : data.events.filter(e => e.period === period);
+  const yellowsInMatchByPlayer = {};
+  for (const e of evts) {
+    if (!e.playerId || !byPlayer[e.playerId]) {
+      // opp_chance may have no playerId in old records — attribute to GK from onCourt[0]
+      if (e.type === 'opp_chance') {
+        const gkId = e.playerId || (e.onCourt && e.onCourt[0]);
+        if (gkId && byPlayer[gkId]) {
+          byPlayer[gkId].oppChances++;
+          if (e.result === 'parada') byPlayer[gkId].saves++;
+          else if (e.result === 'gol') byPlayer[gkId].oppGoals++;
+          else byPlayer[gkId].oppOff++;
+        }
+      }
+      continue;
+    }
+    const s = byPlayer[e.playerId];
+    if (e.type === 'chance') {
+      s.chances++;
+      if (e.result === 'gol') s.goals++;
+      else if (e.result === 'parada') s.chancesSaved++;
+      else s.chancesOff++;
+    } else if (e.type === 'assist_goal') s.assistsGoal++;
+    else if (e.type === 'assist_nogoal') s.assistsNoGoal++;
+    else if (e.type === 'recovery') s.recoveries++;
+    else if (e.type === 'loss') s.losses++;
+    else if (e.type === 'foul') s.fouls++;
+    else if (e.type === 'yellow') {
+      s.yellows++;
+      yellowsInMatchByPlayer[e.playerId] = (yellowsInMatchByPlayer[e.playerId] || 0) + 1;
+    }
+    else if (e.type === 'red') s.reds++;
+    else if (e.type === 'ga_blame') s.gaBlame++;
+    else if (e.type === 'duel_off_won') s.duelOffWon++;
+    else if (e.type === 'duel_off_lost') s.duelOffLost++;
+    else if (e.type === 'duel_def_won') s.duelDefWon++;
+    else if (e.type === 'duel_def_lost') s.duelDefLost++;
+    else if (e.type === 'opp_chance') {
+      s.oppChances++;
+      if (e.result === 'parada') s.saves++;
+      else if (e.result === 'gol') s.oppGoals++;
+      else s.oppOff++;
+    }
+    else if (e.type === 'penalty') {
+      if (e.side === 'for') {
+        s.chances++;
+        if (e.result === 'gol') s.goals++;
+        else if (e.result === 'parada') s.chancesSaved++;
+        else s.chancesOff++;
+      } else if (e.side === 'against') {
+        s.oppChances++;
+        if (e.result === 'parada') s.saves++;
+        else if (e.result === 'gol') s.oppGoals++;
+        else s.oppOff++;
+      }
+    }
+  }
+  // Double yellow → +1 red (same rule as the season-wide stats)
+  for (const [pid, count] of Object.entries(yellowsInMatchByPlayer)) {
+    if (byPlayer[pid]) byPlayer[pid].reds += Math.floor(count / 2);
+  }
+
+  // Only show players who did something in this scope
+  let rows = Object.values(byPlayer).filter(s =>
+    s.minutes > 0 || s.rotations || s.goals || s.chances ||
+    s.assistsGoal || s.assistsNoGoal || s.recoveries || s.losses ||
+    s.fouls || s.yellows || s.reds || s.oppChances || s.gaBlame ||
+    s.duelOffWon || s.duelOffLost || s.duelDefWon || s.duelDefLost);
+  rows.sort((a, b) => (b.minutes - a.minutes) || (a.number - b.number));
+
+  const periodTxt = period == null ? 'Total del partido' : (period === 1 ? '1ª parte' : '2ª parte');
+  if (rows.length === 0) {
+    return `<div style="font-size:12px; color:#5b6776; margin-bottom:8px;">${periodTxt}</div>
+      <div style="padding:20px; text-align:center; color:#5b6776;">Sin datos por jugador en este intervalo.</div>`;
+  }
+
+  const bodyRows = rows.map(s => {
+    const cardsTxt = (s.yellows ? '🟨'.repeat(Math.min(s.yellows, 2)) : '') + (s.reds ? '🟥' : '');
+    const gkCells = (s.isGK || s.oppChances)
+      ? `<td>${s.oppChances}/${s.oppGoals}/${s.saves}/${s.oppOff}</td>`
+      : `<td>—</td>`;
+    return `<tr>
+      <td>${s.number}</td>
+      <td class="name">${escapeHtml(s.alias || s.name)}</td>
+      <td>${formatTime(s.minutes)}</td>
+      <td>${s.rotations || ''}</td>
+      <td>${s.goals || ''}</td>
+      <td class="ogpf">${s.chances}/${s.goals}/${s.chancesSaved}/${s.chancesOff}</td>
+      <td>${s.assistsGoal || ''}</td>
+      <td>${s.recoveries || ''}</td>
+      <td>${s.losses || ''}</td>
+      <td>${s.fouls || ''}</td>
+      <td>${cardsTxt}</td>
+      ${gkCells}
+    </tr>`;
+  }).join('');
+
+  return `
+    <div style="font-size:12px; color:#5b6776; margin-bottom:8px;">${periodTxt} · datos del partido activo</div>
+    <div style="overflow-x:auto;">
+    <table class="stats-table" style="width:100%;">
+      <thead><tr>
+        <th>#</th>
+        <th style="text-align:left;">Jugador</th>
+        <th>Min</th>
+        <th title="Rotaciones (entradas a pista)">Rot</th>
+        <th title="Goles">G</th>
+        <th title="Ocasiones/Goles/Paradas rival/Fuera">O/G/P/F</th>
+        <th title="Asistencias de gol">A·G</th>
+        <th title="Recuperaciones">Rec</th>
+        <th title="Pérdidas">Pérd</th>
+        <th>Faltas</th>
+        <th>Tarjetas</th>
+        <th title="Portero: Ocasiones/Goles/Paradas/Fuera recibidas">Portero O/G/P/F</th>
+      </tr></thead>
+      <tbody>${bodyRows}</tbody>
+    </table>
+    </div>
+  `;
 }
 
 function personCardChip(p, context) {
@@ -4132,6 +4644,26 @@ async function undoEvent(eventId) {
   if (evt.type === 'opp_chance' && evt.result === 'gol') {
     state.match.scoreAgainst = Math.max(0, state.match.scoreAgainst - 1);
   }
+  // Penalty: undo both the score effect and the companion foul (if any).
+  if (evt.type === 'penalty') {
+    if (evt.result === 'gol') {
+      if (evt.side === 'for') state.match.scoreFor = Math.max(0, state.match.scoreFor - 1);
+      else state.match.scoreAgainst = Math.max(0, state.match.scoreAgainst - 1);
+    }
+    if (evt.accumulatesFoul) {
+      // Find the auto-generated foul event we created alongside this penalty
+      // (same {time, period}, autoFromPenalty flag) and delete it too.
+      const companionIdx = state.match.events.findIndex(e =>
+        e.autoFromPenalty && e.time === evt.time && e.period === evt.period &&
+        (e.type === (evt.side === 'for' ? 'opp_foul' : 'foul'))
+      );
+      if (companionIdx >= 0) {
+        const cId = state.match.events[companionIdx].id;
+        state.match.events.splice(companionIdx, 1);
+        await deleteEventFromDB(cId);
+      }
+    }
+  }
   state.match.events.splice(idx, 1);
   await deleteEventFromDB(eventId);
   await saveCurrentMatch();
@@ -4153,7 +4685,8 @@ function openEventEditor(eventId) {
   const evt = state.match.events.find(e => e.id === eventId);
   if (!evt) return;
   if (evt.type === 'possession') {
-    alert('Las posesiones no se pueden editar aquí. Deshaz y vuelve a marcar posesión.');
+    // Legacy events from before possession was removed; can't be edited here.
+    alert('Este es un evento antiguo de posesión (ya no se usan). Bórralo con la papelera si quieres.');
     return;
   }
   editingEventId = eventId;
@@ -4537,25 +5070,6 @@ function renderClock() {
   // Body class for the dashed-slot visual cue when either J5 is on
   document.body.classList.toggle('j5-on', !!state.match.juego5For || !!state.match.juego5Against);
 
-  // Possession counters + total time per team (calculated, not a live timer)
-  const ps = computePossessionStats();
-  const pf = document.getElementById('possForCount');
-  const pa = document.getElementById('possAgainstCount');
-  if (pf) pf.textContent = ps.forCount;
-  if (pa) pa.textContent = ps.againstCount;
-  // Highlight the team that currently holds possession (last possession event)
-  const possEvts = state.match.events.filter(e => e.type === 'possession');
-  const lastPoss = possEvts.length ? possEvts[possEvts.length - 1] : null;
-  const pfBtn = document.getElementById('possForBtn');
-  const paBtn = document.getElementById('possAgainstBtn');
-  if (pfBtn) pfBtn.classList.toggle('poss-running', lastPoss && lastPoss.team === 'for');
-  if (paBtn) paBtn.classList.toggle('poss-running', lastPoss && lastPoss.team === 'against');
-  // Show accumulated time under each count
-  const pfLabel = pfBtn ? pfBtn.querySelector('.poss-mini-label') : null;
-  const paLabel = paBtn ? paBtn.querySelector('.poss-mini-label') : null;
-  if (pfLabel) pfLabel.textContent = ps.forCount ? formatTime(ps.forTime) : 'Pos.';
-  if (paLabel) paLabel.textContent = ps.againstCount ? formatTime(ps.againstTime) : 'Pos.';
-
   // Fouls counters for the CURRENT period (reset to 0 each period)
   const period = state.match.timer.period;
   let foulsFor = 0, foulsAgainst = 0;
@@ -4694,15 +5208,13 @@ function renderActionPrompt() {
 
 function renderEventLog() {
   const container = document.getElementById('eventLog');
-  const possContainer = document.getElementById('possessionLog');
-  const possLive = document.getElementById('possLive');
   if (!container) return;
   container.innerHTML = '';
 
-  // Split events: actions (non-possession) vs possession
+  // Events shown reverse-chronologically (newest on top), most recent 30.
+  // Legacy possession events (from before possession was removed) are hidden.
   const allEvents = [...state.match.events];
   const actionEvents = allEvents.filter(e => e.type !== 'possession').reverse().slice(0, 30);
-  const possEventsAll = allEvents.filter(e => e.type === 'possession');
 
   if (actionEvents.length === 0) {
     container.innerHTML = '<div style="color:#64748b; font-size:13px; padding:8px;">Sin eventos todavía</div>';
@@ -4710,37 +5222,6 @@ function renderEventLog() {
     actionEvents.forEach(evt => container.appendChild(buildEventRow(evt)));
   }
   bindEventRows(container);
-
-  // Possession live panel (% bar + total times)
-  if (possLive) {
-    const ps = computePossessionStats();
-    if (ps.forCount === 0 && ps.againstCount === 0) {
-      possLive.innerHTML = '<div style="color:#64748b; font-size:12px;">Sin posesiones. Usa los botones de la barra superior.</div>';
-    } else {
-      possLive.innerHTML = `
-        <div class="poss-live-bar">
-          <div class="pf" style="width:${ps.forPct}%">${ps.forPct}%</div>
-          <div class="pa" style="width:${ps.againstPct}%">${ps.againstPct}%</div>
-        </div>
-        <div class="poss-live-times">
-          <span>🔵 ${formatTime(ps.forTime)} · ${ps.forCount} pos.</span>
-          <span>🔴 ${formatTime(ps.againstTime)} · ${ps.againstCount} pos.</span>
-        </div>
-      `;
-    }
-  }
-
-  // Possession event log (right side)
-  if (possContainer) {
-    possContainer.innerHTML = '';
-    const possRecent = [...possEventsAll].reverse().slice(0, 30);
-    if (possRecent.length === 0) {
-      possContainer.innerHTML = '<div style="color:#64748b; font-size:13px; padding:8px;">Sin posesiones registradas</div>';
-    } else {
-      possRecent.forEach(evt => possContainer.appendChild(buildEventRow(evt)));
-      bindEventRows(possContainer);
-    }
-  }
 }
 
 // Build a single event row element (used by both logs).
@@ -4773,20 +5254,15 @@ function buildEventRow(evt) {
     const inTxt = pIn ? escapeHtml(displayName(pIn)) : '(hueco)';
     const outTxt = pOut ? escapeHtml(displayName(pOut)) : '(hueco)';
     label = `🔄 Cambio: ${outTxt} → ${inTxt}`;
-  } else if (evt.type === 'possession') {
-    const possEvts = state.match.events
-      .filter(e => e.type === 'possession')
-      .sort((a, b) => (a.period - b.period) || (a.time - b.time));
-    const myIdx = possEvts.findIndex(e => e.id === evt.id);
-    const nextEvt = possEvts[myIdx + 1];
-    let end;
-    if (nextEvt && nextEvt.period === evt.period) end = nextEvt.time;
-    else if (evt.period === state.match.timer.period) end = Math.min(currentMatchSeconds(), matchPeriodLength());
-    else end = matchPeriodLength();
-    const dur = Math.max(0, end - evt.time);
-    const teamTxt = evt.team === 'for' ? '🔵 Nuestra' : '🔴 Rival';
-    const j5txt = evt.j5 ? ' ⚡5' : '';
-    label = `${teamTxt}${j5txt} · ${formatTime(dur)}`;
+  } else if (evt.type === 'penalty') {
+    // Penalty: side + result. Include shooter/GK name where meaningful.
+    const sideTxt = evt.side === 'for' ? '⚡ A favor' : '🛑 En contra';
+    let resTxt = '';
+    if (evt.result === 'gol') resTxt = '⚽ Gol';
+    else if (evt.result === 'parada') resTxt = '🧤 Parada';
+    else resTxt = '❌ Fallado';
+    const foulTxt = evt.accumulatesFoul ? ' · +falta' : '';
+    label = `🥅 Penalti ${sideTxt} · ${resTxt}${foulTxt}`;
   }
   // J5 marker on the row (so we know if it happened during a power play)
   let j5mark = '';
@@ -4875,6 +5351,18 @@ function renderPlayerGrid() {
       const pa = posOrder[a.position] ?? 9;
       const pb = posOrder[b.position] ?? 9;
       if (pa !== pb) return pa - pb;
+      return a.number - b.number;
+    });
+  } else if (pickerMode?.kind === 'action') {
+    // Actions: keep the on-court slot order (Portero → Cierre → Ala → Ala → Pívot)
+    // so the picker mirrors the layout Toni sees on the court. Any player not
+    // on court (e.g. rare edge case) sinks to the end sorted by number.
+    const slotIndex = new Map();
+    state.match.onCourt.forEach((pid, idx) => { if (pid) slotIndex.set(pid, idx); });
+    players.sort((a, b) => {
+      const sa = slotIndex.has(a.id) ? slotIndex.get(a.id) : 99;
+      const sb = slotIndex.has(b.id) ? slotIndex.get(b.id) : 99;
+      if (sa !== sb) return sa - sb;
       return a.number - b.number;
     });
   } else {
@@ -5087,7 +5575,15 @@ async function loadMatchData(matchId, isActive) {
   const subRecs = await dbGetAllByIndex('subs', 'matchId', matchId);
   const subs = {};
   (subRecs || []).forEach(s => {
-    subs[s.playerId] = {totalSeconds: s.totalSeconds || 0};
+    // Preserve full sub record so we can compute stats that need the
+    // per-stint history (rotations, per-period minutes, etc.). The persisted
+    // record already has these (saveSubRecord spreads them), the read path
+    // was just discarding them.
+    subs[s.playerId] = {
+      totalSeconds: s.totalSeconds || 0,
+      history: Array.isArray(s.history) ? s.history : [],
+      periodIn: s.periodIn ?? null,
+    };
   });
   _matchDataCache[matchId] = {events: events || [], subs};
   return _matchDataCache[matchId];
@@ -5152,6 +5648,7 @@ async function computeAggregatedStats(selectedMatches) {
       duelOffWon: 0, duelOffLost: 0,   // offensive duels won / lost
       duelDefWon: 0, duelDefLost: 0,   // defensive duels won / lost
       matchesPlayed: 0,     // convoked count
+      rotations: 0,         // total times entered the pitch across matches
     };
   });
 
@@ -5178,6 +5675,30 @@ async function computeAggregatedStats(selectedMatches) {
       if (!byPlayer[pid]) continue;
       const mins = m.isActive ? getPlayerMatchSeconds(pid) : (s.totalSeconds || 0);
       if (mins > 0) byPlayer[pid].minutes += mins;
+    }
+
+    // Rotations = times entered the pitch. For the active match use the live
+    // helper (reads state.match.subs); for saved matches use the history we
+    // just loaded. Not filtered by J5 — same rationale as minutes.
+    for (const [pid, s] of Object.entries(data.subs)) {
+      if (!byPlayer[pid]) continue;
+      const rots = m.isActive ? getPlayerRotationsCount(pid) : countRotationsFromSub(s);
+      if (rots > 0) byPlayer[pid].rotations += rots;
+    }
+
+    // Double yellow → also counts as a red. Applied per-match: if a player
+    // received 2+ yellows in this match, add 1 red per pair. In practice
+    // there's at most one pair per match (2nd yellow triggers expulsion),
+    // but the math generalises safely.
+    const yellowsByPlayerInMatch = {};
+    for (const e of data.events) {
+      if (e.type !== 'yellow' || !e.playerId) continue;
+      if (!eventMatchesJ5(e)) continue;
+      yellowsByPlayerInMatch[e.playerId] = (yellowsByPlayerInMatch[e.playerId] || 0) + 1;
+    }
+    for (const [pid, count] of Object.entries(yellowsByPlayerInMatch)) {
+      if (!byPlayer[pid]) continue;
+      byPlayer[pid].reds += Math.floor(count / 2);
     }
 
     // Events (filtered by J5 situation)
@@ -5213,6 +5734,22 @@ async function computeAggregatedStats(selectedMatches) {
           else byPlayer[gkId].oppOff++;
         }
       }
+      else if (e.type === 'penalty') {
+        // Penalty in favour: counts as a chance for the shooter.
+        // Penalty against us: counts as an opponent chance faced by the GK.
+        // e.playerId was set to the shooter (for) or GK (against) at logPenalty time.
+        if (e.side === 'for') {
+          s.chances++;
+          if (e.result === 'gol') s.goals++;
+          else if (e.result === 'parada') s.chancesSaved++;
+          else s.chancesOff++;
+        } else if (e.side === 'against') {
+          s.oppChances++;
+          if (e.result === 'parada') s.saves++;
+          else if (e.result === 'gol') s.oppGoals++;
+          else s.oppOff++;
+        }
+      }
     }
   }
 
@@ -5220,41 +5757,22 @@ async function computeAggregatedStats(selectedMatches) {
 }
 
 // Compute team-level aggregated stats (us vs opponent) across selected matches.
-async function computeTeamStats(selectedMatches) {
-  const us = {goals:0, chances:0, chancesOff:0, chancesSaved:0, recoveries:0, losses:0, fouls:0, yellows:0, reds:0, possCount:0, possTime:0};
-  const them = {goals:0, chances:0, chancesOff:0, chancesSaved:0, recoveries:0, losses:0, fouls:0, yellows:0, reds:0, possCount:0, possTime:0};
+// `periodFilter` (optional): 1 or 2 to restrict events to that period; null/undefined = both.
+// `ignoreJ5Filter` (optional): if true, do NOT apply the global J5 stats filter — used by the
+// live in-match modal so the numbers reflect the whole match regardless of the Stats tab's filter.
+async function computeTeamStats(selectedMatches, periodFilter = null, ignoreJ5Filter = false) {
+  const empty = () => ({goals:0, chances:0, chancesOff:0, chancesSaved:0, recoveries:0, losses:0, fouls:0, yellows:0, reds:0, penalties:0, penaltiesGoals:0});
+  const us = empty();
+  const them = empty();
 
   for (const m of selectedMatches) {
     const data = await loadMatchData(m.id, m.isActive);
-    const evts = data.events;
-    // Possession durations.
-    // For the LAST possession of a period: if this is the active match's current
-    // period, it only counts up to the current clock (not the full 20:00),
-    // matching how the Match tab computes it. Otherwise (finished match or past
-    // period) it runs to the end of the period.
-    const possEvts = evts.filter(e => e.type === 'possession').sort((a,b)=>(a.period-b.period)||(a.time-b.time));
-    for (let i=0;i<possEvts.length;i++){
-      const e = possEvts[i]; const next = possEvts[i+1];
-      // Apply the J5 situation filter to possessions:
-      //  - 'j5for'/'j5against': only count possessions flagged as power play (j5)
-      // (We still use the next possession's time to measure this one's duration.)
-      if (statsFilters.j5 !== 'all' && !e.j5) continue;
-      let end;
-      // Period length depends on the match (could be a custom 'tiempo corrido')
-      const matchPL = (m.periodLength) || PERIOD_LENGTH_SECONDS;
-      if (next && next.period===e.period) {
-        end = next.time;
-      } else if (m.isActive && e.period === state.match.timer.period) {
-        end = Math.min(currentMatchSeconds(), matchPL);
-      } else {
-        end = matchPL;
-      }
-      const dur = Math.max(0, end - e.time);
-      if (e.team==='for'){ us.possCount++; us.possTime+=dur; }
-      else { them.possCount++; them.possTime+=dur; }
+    let evts = data.events;
+    if (periodFilter === 1 || periodFilter === 2) {
+      evts = evts.filter(e => e.period === periodFilter);
     }
     for (const e of evts) {
-      if (!eventMatchesJ5(e)) continue;
+      if (!ignoreJ5Filter && !eventMatchesJ5(e)) continue;
       if (e.type === 'chance') {
         us.chances++;
         if (e.result==='gol') us.goals++;
@@ -5271,6 +5789,22 @@ async function computeTeamStats(selectedMatches) {
         else if (e.result==='parada') them.chancesSaved++; // we saved → their chance "saved"
         else them.chancesOff++;
       } else if (e.type === 'opp_foul') them.fouls++;
+      else if (e.type === 'penalty') {
+        // Penalty: attribute chance / goal to the correct team, and count total penalties.
+        if (e.side === 'for') {
+          us.penalties++;
+          us.chances++;
+          if (e.result === 'gol') { us.goals++; us.penaltiesGoals++; }
+          else if (e.result === 'parada') us.chancesSaved++;
+          else us.chancesOff++;
+        } else if (e.side === 'against') {
+          them.penalties++;
+          them.chances++;
+          if (e.result === 'gol') { them.goals++; them.penaltiesGoals++; }
+          else if (e.result === 'parada') them.chancesSaved++;
+          else them.chancesOff++;
+        }
+      }
     }
   }
   return {us, them, matchCount: selectedMatches.length};
@@ -5368,19 +5902,13 @@ async function renderStats() {
   const filtered = applyMatchFilters(allMatches);
   const selected = filtered.filter(m => statsFilters.selectedMatchIds.has(m.id));
 
-  // The possession panel is shown only in the Player view — in Team view the
-  // possession data already lives inside the comparison table.
-  const possPanel = document.getElementById('possessionPanel');
   const tablePanel = document.getElementById('statsTablePanel');
   if (statsFilters.view === 'team') {
-    if (possPanel) possPanel.style.display = 'none';
     if (tablePanel) tablePanel.classList.add('team-narrow');
   } else {
-    if (possPanel) possPanel.style.display = '';
     if (tablePanel) tablePanel.classList.remove('team-narrow');
     const extra = document.getElementById('teamGoalTables');
     if (extra) extra.style.display = 'none';
-    await renderPossessionPanel(selected);
   }
 
   if (selected.length === 0) {
@@ -5424,7 +5952,7 @@ async function renderPlayerStats(selected) {
   let rows = Object.values(byPlayer).filter(s =>
     s.minutes>0 || s.goals || s.chances || s.assistsGoal || s.assistsNoGoal ||
     s.recoveries || s.losses || s.fouls || s.yellows || s.reds || s.saves ||
-    s.gaBlame || s.oppChances || s.matchesPlayed ||
+    s.gaBlame || s.oppChances || s.matchesPlayed || s.rotations ||
     s.duelOffWon || s.duelOffLost || s.duelDefWon || s.duelDefLost);
 
   // Sorting: default by chances desc. statsFilters.sortKey/sortDir control it.
@@ -5437,6 +5965,11 @@ async function renderPlayerStats(selected) {
       case 'position': return s.position || '';
       case 'matchesPlayed': return s.matchesPlayed || 0;
       case 'minutes': return s.minutes || 0;
+      case 'rotations': {
+        if (statsFilters.calc === 'perMatch') return s.matchesPlayed ? s.rotations / s.matchesPlayed : 0;
+        if (statsFilters.calc === 'perTime')  return s.minutes ? s.rotations / (s.minutes/60) : 0;
+        return s.rotations || 0;
+      }
       case 'goals': return s.goals || 0;
       case 'chances': return s.chances || 0;
       case 'assistsGoal': return s.assistsGoal || 0;
@@ -5513,6 +6046,7 @@ async function renderPlayerStats(selected) {
       ${sh('position', 'Pos')}
       ${sh('matchesPlayed', 'PC', 'Partidos convocado')}
       ${sh('minutes', 'Min')}
+      ${sh('rotations', 'Rot', 'Rotaciones (veces que ha entrado a pista)')}
       ${sh('goals', 'G', 'Goles')}
       ${sh('chances', 'O/G/P/F', 'Ocasiones/Goles/Paradas rival/Fuera (ordena por ocasiones)')}
       ${sh('assistsGoal', 'A·G', 'Asistencias de gol')}
@@ -5536,6 +6070,7 @@ async function renderPlayerStats(selected) {
           <td><span class="pos-pill pos-${s.position}">${s.position}</span></td>
           <td>${s.matchesPlayed || ''}</td>
           <td>${minCell(s)}</td>
+          <td>${v(s, s.rotations)}</td>
           <td>${v(s, s.goals)}</td>
           <td class="ogpf">${ogpf(s)}</td>
           <td>${v(s, s.assistsGoal)}</td>
@@ -5580,10 +6115,6 @@ async function renderTeamStats(selected) {
   titleEl.textContent = 'Equipo · nosotros vs rival';
 
   const {us, them} = await computeTeamStats(selected);
-  const usPct = (us.possTime + them.possTime) ? Math.round(us.possTime/(us.possTime+them.possTime)*100) : 0;
-  const themPct = (us.possTime + them.possTime) ? 100 - usPct : 0;
-  const usAvg = us.possCount ? us.possTime/us.possCount : 0;
-  const themAvg = them.possCount ? them.possTime/them.possCount : 0;
 
   const row = (label, u, t) => `<tr><td class="team-metric">${label}</td><td class="team-us">${u}</td><td class="team-them">${t}</td></tr>`;
   // Goals row: highlighted (bold + larger)
@@ -5607,11 +6138,8 @@ async function renderTeamStats(selected) {
     <thead><tr><th style="text-align:left;">Métrica</th><th>Nosotros</th><th>Rival</th></tr></thead>
     <tbody>
       ${goalsRow}
-      ${row('Nº posesiones', us.possCount, them.possCount)}
-      ${row('Tiempo posesión', formatTime(us.possTime), formatTime(them.possTime))}
-      ${row('% posesión', usPct + '%', themPct + '%')}
-      ${row('Tiempo medio/posesión', formatTime(usAvg), formatTime(themAvg))}
       ${row('O/G/P/F', `${us.chances}/${us.goals}/${us.chancesSaved}/${us.chancesOff}`, `${them.chances}/${them.goals}/${them.chancesSaved}/${them.chancesOff}`)}
+      ${row('Penaltis (G)', `${us.penalties} (${us.penaltiesGoals})`, `${them.penalties} (${them.penaltiesGoals})`)}
       ${row('Recuperaciones', us.recoveries, '—')}
       ${row('Pérdidas', us.losses, '—')}
       ${row('Faltas', us.fouls, them.fouls)}
@@ -5645,38 +6173,6 @@ async function renderTeamStats(selected) {
         </table>
       </div>
     </div>
-  `;
-}
-
-// ---- POSSESSION PANEL (chart + numbers) ----
-async function renderPossessionPanel(selected) {
-  const el = document.getElementById('possessionSummary');
-  if (!el) return;
-  if (!selected || selected.length === 0) {
-    el.innerHTML = '<div style="color:#5b6776; font-size:13px;">Selecciona partidos para ver la posesión.</div>';
-    return;
-  }
-  const {us, them} = await computeTeamStats(selected);
-  const total = us.possTime + them.possTime;
-  const usPct = total ? Math.round(us.possTime/total*100) : 0;
-  const themPct = total ? 100 - usPct : 0;
-  const usAvg = us.possCount ? us.possTime/us.possCount : 0;
-  const themAvg = them.possCount ? them.possTime/them.possCount : 0;
-  if (us.possCount === 0 && them.possCount === 0) {
-    el.innerHTML = '<div style="color:#5b6776; font-size:13px;">No hay datos de posesión en los partidos seleccionados.</div>';
-    return;
-  }
-  el.innerHTML = `
-    <div class="poss-live-bar" style="height:30px; margin-bottom:12px;">
-      <div class="pf" style="width:${usPct}%">${usPct}%</div>
-      <div class="pa" style="width:${themPct}%">${themPct}%</div>
-    </div>
-    <table class="poss-summary-table">
-      <tr><th></th><th>Nosotros</th><th>Rival</th></tr>
-      <tr><td>Nº posesiones</td><td>${us.possCount}</td><td>${them.possCount}</td></tr>
-      <tr><td>Tiempo total</td><td>${formatTime(us.possTime)}</td><td>${formatTime(them.possTime)}</td></tr>
-      <tr><td>Tiempo medio/posesión</td><td>${formatTime(usAvg)}</td><td>${formatTime(themAvg)}</td></tr>
-    </table>
   `;
 }
 
@@ -5871,7 +6367,8 @@ function renderHistory() {
           <div style="font-weight:700; font-size:15px;">${date} ${m.opponent ? '· vs ' + m.opponent : ''}</div>
           <div style="color:#5b6776; font-size:13px;">Resultado: <strong>${m.scoreFor} - ${m.scoreAgainst}</strong> · ${m.events.length} eventos</div>
         </div>
-        <div style="display:flex; gap:6px;">
+        <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+          <button class="btn btn-primary" data-chronicle="${m.id}" title="Preparar texto de crónica para WhatsApp">📱 Crónica</button>
           <button class="btn btn-ghost" data-export="${m.id}">📥 Exportar</button>
           <button class="btn btn-danger" data-del="${m.id}">Eliminar</button>
         </div>
@@ -5902,6 +6399,164 @@ function renderHistory() {
       exportMatchCSV(m);
     });
   });
+  list.querySelectorAll('[data-chronicle]').forEach(b => {
+    b.addEventListener('click', e => {
+      const mid = e.currentTarget.dataset.chronicle;
+      openChronicleModal(mid);
+    });
+  });
+}
+
+// ============================================================
+// WHATSAPP CHRONICLE (post-match summary text for sharing)
+// ============================================================
+// Compute scorers and conceders (goalkeepers) from a finished match's events.
+// Returns { scorers: [{player, count}], conceders: [{player, count}] } sorted
+// by count desc (ties by shirt number).
+async function computeChronicleGoals(match) {
+  // Events for finished matches live in IndexedDB, not on the match object.
+  const data = await loadMatchData(match.id, false);
+  const scorerCount = {};   // playerId → goals scored by them
+  const concederCount = {}; // playerId → goals conceded while they were GK
+  for (const e of data.events) {
+    // Goals for us: chance/gol → shooter; penalty/for/gol → shooter (playerId is already the shooter)
+    if (e.type === 'chance' && e.result === 'gol' && e.playerId) {
+      scorerCount[e.playerId] = (scorerCount[e.playerId] || 0) + 1;
+    }
+    if (e.type === 'penalty' && e.side === 'for' && e.result === 'gol') {
+      const pid = e.shooterId || e.playerId;
+      if (pid) scorerCount[pid] = (scorerCount[pid] || 0) + 1;
+    }
+    // Goals against us: attribute to the goalkeeper on court
+    // (opp_chance stores playerId=GK; older records fall back to onCourt[0])
+    if (e.type === 'opp_chance' && e.result === 'gol') {
+      const gkId = e.playerId || (e.onCourt && e.onCourt[0]);
+      if (gkId) concederCount[gkId] = (concederCount[gkId] || 0) + 1;
+    }
+    if (e.type === 'penalty' && e.side === 'against' && e.result === 'gol') {
+      const gkId = e.gkId || e.playerId || (e.onCourt && e.onCourt[0]);
+      if (gkId) concederCount[gkId] = (concederCount[gkId] || 0) + 1;
+    }
+  }
+  // Convert to arrays of {player, count}. Player is looked up from the current
+  // roster; if the player isn't found (e.g. removed after the match), we skip.
+  const toRows = (obj) => Object.entries(obj)
+    .map(([pid, count]) => ({ player: getPlayer(pid), count }))
+    .filter(r => r.player)
+    .sort((a, b) => (b.count - a.count) || ((a.player.number || 99) - (b.player.number || 99)));
+  return { scorers: toRows(scorerCount), conceders: toRows(concederCount) };
+}
+
+// Build the plain-text chronicle for WhatsApp.
+async function buildChronicleText(match) {
+  const { scorers, conceders } = await computeChronicleGoals(match);
+  const oppName = (match.opponent || '').trim() || 'Rival';
+  const mvp = match.mvpPlayerId ? getPlayer(match.mvpPlayerId) : null;
+
+  const goalLines = scorers.length
+    ? scorers.map(r => `${'⚽'.repeat(r.count)} ${r.player.name} (${r.player.number ?? '·'})`).join('\n')
+    : '(sin goles)';
+  const concededLines = conceders.length
+    ? conceders.map(r => `${'🔴'.repeat(r.count)} ${r.player.name} (${r.player.number ?? '·'})`).join('\n')
+    : '(sin goles encajados)';
+  const mvpLine = mvp
+    ? `MVP: ${mvp.name} (${mvp.number ?? '·'})`
+    : 'MVP: (por definir)';
+
+  // Layout is exactly what Toni asked for: bullet-star at the start of each
+  // score line, a blank line for breathing, "Crónica >" placeholder to be
+  // filled in later by hand, then goals scored/conceded and MVP. Extra
+  // trailing whitespace after "Goles Realizados:" / "Goles encajados:" is
+  // intentional so the emoji lines start on the next visual block.
+  return [
+    `* Club Natació - ${match.scoreFor}`,
+    `* ${oppName} - ${match.scoreAgainst}`,
+    ``,
+    `Crónica >`,
+    ``,
+    `Goles Realizados:`,
+    goalLines,
+    ``,
+    `Goles encajados:`,
+    concededLines,
+    ``,
+    mvpLine,
+  ].join('\n');
+}
+
+// ---- Chronicle modal (opens from the history tab) ----
+let chronicleMatchId = null;
+async function openChronicleModal(matchId) {
+  const m = state.history.find(x => x.id === matchId);
+  if (!m) return;
+  chronicleMatchId = matchId;
+  const modal = document.getElementById('chronicleModal');
+  const title = document.getElementById('chronicleTitle');
+  const dateStr = new Date(m.date).toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit', year:'numeric'});
+  title.textContent = `📱 Crónica — ${dateStr} vs ${m.opponent || 'Rival'} (${m.scoreFor}-${m.scoreAgainst})`;
+
+  // Populate the MVP dropdown with anyone we're comfortable proposing:
+  // convocados if we have attendance for the linked activity, otherwise the
+  // whole current roster (sorted by number).
+  const sel = document.getElementById('chronicleMvpSelect');
+  let candidates = state.roster.slice().sort((a,b) => (a.number || 99) - (b.number || 99));
+  if (m.activityId) {
+    try {
+      // Make sure attendance is loaded for this activity
+      if (!state.attendanceByActivity[m.activityId]) {
+        await loadAttendanceForActivity(m.activityId);
+      }
+      const attRecs = state.attendanceByActivity[m.activityId] || [];
+      const attended = new Set(attRecs.filter(r => r.asistencia === true).map(r => r.personId));
+      if (attended.size > 0) candidates = candidates.filter(p => attended.has(p.id));
+    } catch (e) { /* fall back to full roster */ }
+  }
+  sel.innerHTML = '<option value="">— Elige MVP —</option>' + candidates.map(p =>
+    `<option value="${p.id}" ${m.mvpPlayerId === p.id ? 'selected' : ''}>${p.number ?? '·'} · ${escapeHtml(p.name)}</option>`
+  ).join('');
+
+  await refreshChronicleText();
+  modal.style.display = 'flex';
+}
+function closeChronicleModal() {
+  chronicleMatchId = null;
+  document.getElementById('chronicleModal').style.display = 'none';
+}
+async function refreshChronicleText() {
+  const m = state.history.find(x => x.id === chronicleMatchId);
+  if (!m) return;
+  const text = await buildChronicleText(m);
+  const ta = document.getElementById('chronicleText');
+  ta.value = text;
+}
+async function saveChronicleMvp() {
+  const m = state.history.find(x => x.id === chronicleMatchId);
+  if (!m) return;
+  const newMvp = document.getElementById('chronicleMvpSelect').value || null;
+  m.mvpPlayerId = newMvp;
+  await dbPut('matches', stripMatchForDB(m));
+  await refreshChronicleText();
+}
+async function copyChronicleToClipboard() {
+  const ta = document.getElementById('chronicleText');
+  const btn = document.getElementById('chronicleCopyBtn');
+  const original = btn.textContent;
+  try {
+    // Prefer the modern Clipboard API; fall back to select+execCommand on
+    // very old browsers or non-secure contexts (unlikely on the Lenovo but
+    // safer if the file is opened straight off disk).
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(ta.value);
+    } else {
+      ta.select();
+      document.execCommand('copy');
+      window.getSelection().removeAllRanges();
+    }
+    btn.textContent = '✓ Copiado';
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  } catch (err) {
+    alert('No se pudo copiar. Selecciona el texto manualmente y cópialo.');
+  }
 }
 
 function exportMatchCSV(match) {
@@ -6693,6 +7348,37 @@ document.querySelectorAll('#editEvtResultRow .filter-chip').forEach(c => {
 });
 document.getElementById('editEvtSave').addEventListener('click', saveEventEdit);
 document.getElementById('editEvtCancel').addEventListener('click', closeEventEditor);
+document.getElementById('editEvtInsert').addEventListener('click', () => {
+  // Insert a new action just AFTER the currently-edited event. We block subs
+  // (that flow is different — they change on-court state, not just log an event)
+  // and close this modal so the user can tap any action button as normal; the
+  // next event to be created will pick up the reference {time, period} + 1s
+  // instead of the live clock.
+  const evt = state.match.events.find(e => e.id === editingEventId);
+  if (!evt) { closeEventEditor(); return; }
+  if (evt.type === 'sub') {
+    alert('No se puede insertar una acción después de un cambio desde aquí. Cierra este editor y usa el botón de la acción justo cuando toque.');
+    return;
+  }
+  startInsertMode(evt);
+  closeEventEditor();
+  // Small hint so the user knows what's expected next.
+  const label = document.getElementById('actionPrompt');
+  if (label) {
+    const tp = insertModeOverride;
+    const mmss = tp ? formatCountdown(tp.time) : '';
+    const pTxt = tp?.period === 2 ? '2ªP' : '1ªP';
+    label.innerHTML = `<div style="background:#ecfeff; border:1px solid #67e8f9; color:#0e7490; padding:8px 12px; border-radius:8px; margin-bottom:8px; font-size:12px;">
+      ➕ <b>Modo insertar</b> — la próxima acción que registres se colocará a las <b>${pTxt} ${mmss}</b>. Pulsa cualquier botón de acción para empezar, o <a href="#" id="cancelInsertMode" style="color:#0e7490; font-weight:600;">cancelar</a>.
+    </div>`;
+    const cancelLink = document.getElementById('cancelInsertMode');
+    if (cancelLink) cancelLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      finishInsertMode();
+      label.innerHTML = '';
+    });
+  }
+});
 // Backdrop click closes
 document.getElementById('eventEditorModal').addEventListener('click', (e) => {
   if (e.target.id === 'eventEditorModal') closeEventEditor();
@@ -6702,10 +7388,6 @@ document.getElementById('eventEditorModal').addEventListener('click', (e) => {
 // Juego de 5 toggles (independent: ours / theirs)
 document.getElementById('juego5ForBtn').addEventListener('click', () => setJuego5('for'));
 document.getElementById('juego5AgainstBtn').addEventListener('click', () => setJuego5('against'));
-
-// Possession counters (each tap = new possession event)
-document.getElementById('possForBtn').addEventListener('click', () => switchPossession('for'));
-document.getElementById('possAgainstBtn').addEventListener('click', () => switchPossession('against'));
 
 // Slot menu modal
 document.getElementById('closeSlotMenu').addEventListener('click', closeSlotMenu);
@@ -6749,6 +7431,74 @@ document.getElementById('duelBackBtn').addEventListener('click', () => {
   document.getElementById('duelStepPlayer').style.display = 'none';
   document.getElementById('duelStepKind').style.display = '';
 });
+
+// Penalty button → open the multi-step wizard
+document.getElementById('penaltyBtn').addEventListener('click', openPenaltyPicker);
+document.getElementById('closePenaltyModal').addEventListener('click', closePenaltyPicker);
+document.getElementById('penaltyModal').addEventListener('click', e => {
+  if (e.target.id === 'penaltyModal') closePenaltyPicker();
+});
+// Step 1 (side)
+document.querySelectorAll('#penStepSide [data-penside]').forEach(b => {
+  b.addEventListener('click', () => {
+    if (!penaltyWizard) return;
+    penaltyWizard.side = b.dataset.penside;
+    showPenaltyStep('foul');
+  });
+});
+// Step 2 (accumulates foul?)
+document.querySelectorAll('#penStepFoul [data-penfoul]').forEach(b => {
+  b.addEventListener('click', () => {
+    if (!penaltyWizard) return;
+    penaltyWizard.accumulatesFoul = b.dataset.penfoul === '1';
+    // Branch by side into the appropriate player-picker step
+    if (penaltyWizard.side === 'for') showPenaltyStep('provoker');
+    else showPenaltyStep('fouled');
+  });
+});
+// Back buttons — each rewinds one step
+document.getElementById('penBackFoul').addEventListener('click', () => showPenaltyStep('side'));
+document.getElementById('penBackProvoker').addEventListener('click', () => showPenaltyStep('foul'));
+document.getElementById('penBackShooter').addEventListener('click', () => showPenaltyStep('provoker'));
+document.getElementById('penBackFouled').addEventListener('click', () => showPenaltyStep('foul'));
+document.getElementById('penBackGK').addEventListener('click', () => showPenaltyStep('fouled'));
+document.getElementById('penBackResult').addEventListener('click', () => {
+  // From result, go back to the last player-picker of the branch
+  if (penaltyWizard?.side === 'for') showPenaltyStep('shooter');
+  else showPenaltyStep('gk');
+});
+// Step 5 (result buttons)
+document.querySelectorAll('#penStepResult [data-penresult]').forEach(b => {
+  b.addEventListener('click', () => logPenalty(b.dataset.penresult));
+});
+
+// Live stats modal (in-match team/player breakdown with 1P/2P/Total filter)
+document.getElementById('liveStatsBtn').addEventListener('click', openLiveStatsModal);
+document.getElementById('closeLiveStatsModal').addEventListener('click', closeLiveStatsModal);
+document.getElementById('liveStatsModal').addEventListener('click', e => {
+  if (e.target.id === 'liveStatsModal') closeLiveStatsModal();
+});
+document.querySelectorAll('#liveStatsScope [data-livescope]').forEach(b => {
+  b.addEventListener('click', () => {
+    liveStatsState.scope = b.dataset.livescope;
+    renderLiveStatsModal();
+  });
+});
+document.querySelectorAll('#liveStatsPeriod [data-liveperiod]').forEach(b => {
+  b.addEventListener('click', () => {
+    liveStatsState.period = b.dataset.liveperiod === 'all' ? null : parseInt(b.dataset.liveperiod, 10);
+    renderLiveStatsModal();
+  });
+});
+
+// Chronicle modal (WhatsApp text)
+document.getElementById('closeChronicleModal').addEventListener('click', closeChronicleModal);
+document.getElementById('chronicleModal').addEventListener('click', e => {
+  if (e.target.id === 'chronicleModal') closeChronicleModal();
+});
+document.getElementById('chronicleSaveMvpBtn').addEventListener('click', saveChronicleMvp);
+document.getElementById('chronicleRefreshBtn').addEventListener('click', refreshChronicleText);
+document.getElementById('chronicleCopyBtn').addEventListener('click', copyChronicleToClipboard);
 // Delegate clicks on person chips
 ['cardCourtList','cardBenchList','cardStaffList'].forEach(id => {
   document.getElementById(id).addEventListener('click', async (e) => {
