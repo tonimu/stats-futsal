@@ -1164,6 +1164,105 @@
     border-color: #a855f7;
   }
 
+  /* Atk/Def mode: distinctive orange highlight (different from J5 purple) */
+  #atkDefBtn.atkdef-active {
+    background: #ea580c;
+    color: #fff;
+    border-color: #ea580c;
+    box-shadow: 0 0 12px rgba(234, 88, 12, 0.5);
+  }
+  /* Pair widget in the bench area */
+  .atkdef-pairs-panel {
+    margin: 8px 0;
+    padding: 8px;
+    background: #fff7ed;
+    border: 2px solid #ea580c;
+    border-radius: 10px;
+  }
+  .atkdef-pairs-panel .atkdef-header {
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: #9a3412;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .atkdef-pair {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 8px;
+    align-items: center;
+    padding: 6px;
+    background: #fff;
+    border-radius: 8px;
+    margin-bottom: 6px;
+  }
+  .atkdef-pair:last-child { margin-bottom: 0; }
+  .atkdef-slot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #fed7aa;
+    background: #fffbeb;
+    cursor: pointer;
+    font-size: 13px;
+    min-width: 0;
+    transition: transform .05s ease, background .1s ease;
+  }
+  .atkdef-slot:active { transform: scale(0.97); }
+  .atkdef-slot.on-court {
+    background: #d1fae5;
+    border-color: #10b981;
+    color: #065f46;
+    cursor: default;
+    font-weight: 600;
+  }
+  .atkdef-slot.on-bench {
+    background: #dbeafe;
+    border-color: #3b82f6;
+    color: #1e40af;
+  }
+  .atkdef-slot.on-bench:hover { background: #bfdbfe; }
+  .atkdef-slot .adnum {
+    display: inline-block;
+    min-width: 22px;
+    padding: 1px 4px;
+    background: rgba(0,0,0,0.08);
+    border-radius: 4px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 11px;
+  }
+  .atkdef-slot .adrole {
+    font-size: 9px;
+    opacity: 0.7;
+    margin-left: 4px;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .atkdef-swap-arrow {
+    font-size: 18px;
+    color: #ea580c;
+    padding: 0 4px;
+  }
+  /* Mark events in the log that happened during AtqDef mode */
+  .atkdef-mark {
+    display: inline-block;
+    padding: 1px 5px;
+    background: #ea580c;
+    color: #fff;
+    font-size: 9px;
+    border-radius: 3px;
+    font-weight: 700;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+
   /* Numeric keypad modal */
   .keypad-display {
     background: #f1f5f9;
@@ -1739,6 +1838,7 @@
           <div class="period" id="periodLabel">1ª Parte</div>
           <button class="btn btn-ghost" id="endPeriodBtn">Fin parte</button>
           <button class="btn btn-ghost" id="clockModeBtn" title="Cambiar modo del reloj (cuenta atrás / tiempo corrido)" style="font-size:11px; padding:4px 8px;">⏱ Cuenta atrás</button>
+          <button class="btn btn-ghost" id="atkDefBtn" title="Modo Ataque/Defensa: configura parejas atacante+defensor que se rotan con un toque" style="font-size:11px; padding:4px 8px;">⚔️ AtqDef</button>
           <button class="btn btn-primary" id="liveStatsBtn" title="Ver estadísticas del partido en vivo" style="font-size:11px; padding:4px 8px;">📊 Stats</button>
         </div>
       </div>
@@ -1756,6 +1856,9 @@
             <div class="panel-title">En pista</div>
             <div class="court-slots" id="courtSlots"></div>
           </div>
+
+          <!-- Atk/Def pairs panel: shown only while the mode is active. -->
+          <div id="atkDefPairsPanel" style="display:none;"></div>
 
           <div class="panel" style="margin-top:12px;">
             <div class="panel-title" id="benchTitle">Suplentes</div>
@@ -1791,9 +1894,10 @@
                 <button class="action-btn small card-red" id="cardRedBtn"><span class="action-icon">🟥</span><span class="action-label">Roja</span></button>
               </div>
               <button class="action-btn" data-type="foul"><span class="action-icon">⚠️</span><span class="action-label">Falta</span></button>
-              <!-- Row 4: Penalti + Duelos -->
+              <!-- Row 4: Penalti + Doble penalti + Duelos -->
               <button class="action-btn" id="penaltyBtn" style="border-color:#dc2626;"><span class="action-icon">🥅</span><span class="action-label">Penalti</span></button>
-              <button class="action-btn" id="duelBtn" style="grid-column: 2 / -1; border-color:#8b5cf6;"><span class="action-icon">⚔️</span><span class="action-label">Duelos</span></button>
+              <button class="action-btn" id="doublePenaltyBtn" style="border-color:#991b1b; background:#fee2e2;"><span class="action-icon">🥅🥅</span><span class="action-label">Doble pen.</span></button>
+              <button class="action-btn" id="duelBtn" style="border-color:#8b5cf6;"><span class="action-icon">⚔️</span><span class="action-label">Duelos</span></button>
             </div>
           </div>
 
@@ -2225,6 +2329,46 @@
   </div>
 </div>
 
+<!-- ===== ATAQUE / DEFENSA CONFIG MODAL ===== -->
+<!-- Opens when the user taps the ⚔️ AtqDef topbar button and the mode is off.-->
+<!-- Lets Toni define up to 2 pairs of {attacker, defender} that will rotate  -->
+<!-- between court and bench with a single tap while the mode is active.      -->
+<div class="modal-backdrop" id="atkDefModal" style="display:none;">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-title">
+      <span>⚔️ Configurar Ataque / Defensa</span>
+      <button class="btn btn-ghost" id="closeAtkDefModal">✕</button>
+    </div>
+    <div style="font-size:12px; color:#5b6776; margin-bottom:12px;">
+      Elige hasta 2 parejas. En cada pareja, uno actúa de <b>atacante</b> y otro de <b>defensor</b>. Uno debe estar en pista y el otro en el banquillo. Podrás rotarlos con un solo toque desde el banquillo.
+    </div>
+    <div id="atkDefPairsConfig"></div>
+    <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+      <button class="btn btn-ghost" id="atkDefAddPairBtn">+ Añadir pareja</button>
+      <button class="btn btn-primary" id="atkDefActivateBtn" style="flex:1;">Guardar y activar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ASSIST → GOAL FOLLOWUP MODAL ===== -->
+<!-- Opens right after registering an assist_goal, so we can capture the -->
+<!-- scorer immediately (or skip if the goal was already logged separately). -->
+<div class="modal-backdrop" id="assistGoalModal" style="display:none;">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-title">
+      <span>⚽ ¿Quién marcó el gol?</span>
+      <button class="btn btn-ghost" id="closeAssistGoalModal">✕</button>
+    </div>
+    <div id="assistGoalHint" style="font-size:12px; color:#5b6776; margin-bottom:10px;"></div>
+    <div id="assistGoalList" class="player-grid"></div>
+    <div style="margin-top:10px;">
+      <button class="btn btn-ghost" id="assistGoalSkipBtn" style="width:100%; border-color:#94a3b8;">
+        No registrar gol (ya lo tengo apuntado)
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== PENALTY PICKER MODAL ===== -->
 <div class="modal-backdrop" id="penaltyModal" style="display:none;">
   <div class="modal" style="max-width:560px;">
@@ -2564,6 +2708,11 @@ function createNewMatch() {
     status: 'active',
     juego5For: false,     // we attack with goalkeeper-as-outfield (our power play)
     juego5Against: false, // opponent attacks 5, we defend in inferiority
+    // Attack/Defence mode (parejas): a pair rotates one attacker + one defender
+    // between court and bench. While the mode is on every new event carries
+    // `atkDef: true` so we can analyse those phases later.
+    attackDefenseActive: false,
+    attackDefensePairs: [],  // [{attackerId, defenderId}, ...] max 2 while active
     sanctions: [],        // active sanctions: [{id, playerId, remainingSec, label}]
     expelledPlayers: [],  // ids of players sent off (cannot return this match)
     events: [],
@@ -2715,6 +2864,8 @@ function stripMatchForDB(match) {
     status: match.status || 'active',
     juego5For: !!match.juego5For,
     juego5Against: !!match.juego5Against,
+    attackDefenseActive: !!match.attackDefenseActive,
+    attackDefensePairs: (match.attackDefensePairs || []).map(p => ({...p})),
     clockMode: match.clockMode || 'countdown',
     periodLength: match.periodLength || PERIOD_LENGTH_SECONDS,
     sanctions: (match.sanctions || []).map(s => ({...s})),
@@ -2869,6 +3020,8 @@ async function loadState() {
       state.match.juego5For = !!state.match.juego5;
     }
     if (typeof state.match.juego5Against !== 'boolean') state.match.juego5Against = false;
+    if (typeof state.match.attackDefenseActive !== 'boolean') state.match.attackDefenseActive = false;
+    if (!Array.isArray(state.match.attackDefensePairs)) state.match.attackDefensePairs = [];
     if (!Array.isArray(state.match.sanctions)) state.match.sanctions = [];
     if (!Array.isArray(state.match.expelledPlayers)) state.match.expelledPlayers = [];
     if (!state.match.clockMode) state.match.clockMode = 'countdown';
@@ -3697,7 +3850,36 @@ function handlePlayerPick(playerId) {
   }
 }
 
-function doSubstitution(slot, newPlayerId) {
+function doSubstitution(slot, newPlayerId, opts = {}) {
+  // Atk/Def pair guard: if this manual sub would break a pair (someone in a
+  // pair leaves the court, or someone in a pair comes in from outside their
+  // partner slot), ask first. Fast swaps set opts.isAtkDefSwap so they bypass.
+  const oldOnSlot = state.match.onCourt[slot];
+  if (!opts.isAtkDefSwap && state.match.attackDefenseActive) {
+    const touched = [oldOnSlot, newPlayerId].filter(pid => pid && findAtkDefPairForPlayer(pid));
+    if (touched.length > 0) {
+      const pairsToBreak = new Set();
+      touched.forEach(pid => {
+        const found = findAtkDefPairForPlayer(pid);
+        if (found) pairsToBreak.add(found.idx);
+      });
+      const names = [...pairsToBreak].map(idx => {
+        const p = state.match.attackDefensePairs[idx];
+        const att = getPlayer(p.attackerId);
+        const def = getPlayer(p.defenderId);
+        return `${displayName(att)} ⇆ ${displayName(def)}`;
+      }).join(', ');
+      const q = pairsToBreak.size === 1
+        ? `Este cambio afecta a la pareja Ataque/Defensa: ${names}.\n\n¿DESHACER PAREJA y hacer el cambio?`
+        : `Este cambio afecta a varias parejas Ataque/Defensa: ${names}.\n\n¿DESHACER PAREJAS y hacer el cambio?`;
+      if (!confirm(q)) {
+        // User cancelled — leave everything untouched (don't apply the pending
+        // sub time either, keep the picker's pending state alive).
+        return;
+      }
+    }
+  }
+
   // If the user adjusted the sub time in the picker (pending), apply it to the
   // official clock now — right before recording the sub. This is what the user
   // asked for: don't touch the clock until we actually make the change.
@@ -3742,6 +3924,8 @@ function doSubstitution(slot, newPlayerId) {
     onCourt: [...state.match.onCourt],
     juego5For: !!state.match.juego5For,
     juego5Against: !!state.match.juego5Against,
+    atkDef: !!state.match.attackDefenseActive,
+    atkDefSwap: !!opts.isAtkDefSwap,  // this specific sub was a fast pair-swap
   };
   state.match.events.push(subEvt);
   saveEvent(subEvt);
@@ -3755,6 +3939,13 @@ function doSubstitution(slot, newPlayerId) {
       state.match.juego5For = false;
     }
   }
+
+  // === Atk/Def pair break-check ===
+  // A manual sub involving anyone in a pair breaks that pair. Fast swaps
+  // (from the pair widget) pass isAtkDefSwap:true so they're exempt.
+  // We pass silent=true because we already asked the user in the guard at
+  // the top of this function — no need for a redundant deferred alert.
+  maybeBreakPairsFor(oldPlayerId, newPlayerId, !!opts.isAtkDefSwap, /*silent*/ true);
 
   renderAll();
   saveState();
@@ -3840,52 +4031,97 @@ async function logAction(type, playerId, extra = {}) {
     onCourt: [...state.match.onCourt],
     juego5For: !!state.match.juego5For,
     juego5Against: !!state.match.juego5Against,
+    atkDef: !!state.match.attackDefenseActive,
     ...extra,
   };
   state.match.events.push(evt);
   await saveEvent(evt);
 
-  // Our chance ending in goal → increment our score
-  if (type === 'chance' && extra.result === 'gol') {
+  // Side-effects on the scoreboard
+  if (type === 'chance' && evt.result === 'gol') {
     state.match.scoreFor++;
     await saveCurrentMatch();
   }
-  finishInsertMode();
-  renderAll();
-}
-
-// Opponent chance: result decides what we store and whether score changes.
-async function logOpponentChance(result) {
-  const {time, period} = getEventTimeAndPeriod();
-  const evt = {
-    id: 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
-    matchId: state.match.id,
-    type: 'opp_chance',
-    // Always record the goalkeeper on court (slot 0), regardless of the result,
-    // so the GK is attributed every opponent chance (fuera / parada / gol).
-    playerId: state.match.onCourt[0] || null,
-    time,
-    period,
-    onCourt: [...state.match.onCourt],
-    juego5For: !!state.match.juego5For,
-    juego5Against: !!state.match.juego5Against,
-    result, // 'fuera' | 'parada' | 'gol'
-  };
-
-  if (result === 'gol') {
+  if (type === 'opp_chance' && evt.result === 'gol') {
     state.match.scoreAgainst++;
     // Official futsal rule: conceding a goal cancels the oldest active sanction
     if (state.match.sanctions.length > 0) {
       state.match.sanctions.shift();
       setTimeout(() => alert(`Inferioridad: puedes recuperar al 5º jugador (gol encajado cancela la sanción).`), 50);
     }
+    await saveCurrentMatch();
   }
 
-  state.match.events.push(evt);
-  await saveEvent(evt);
-  await saveCurrentMatch();
+  // Chained actions: some events auto-generate a companion event at the same
+  // {time, period}. `_chained` flag on the child prevents infinite recursion.
+  // These chains are internal to logAction — external callers never set them.
+  if (!extra._chained) {
+    // ga_blame (gol encajado por culpa de X) → automatically registers the
+    // opponent chance/goal against the GK. That way we don't need a second tap
+    // to increment the scoreboard when someone gifts a goal.
+    if (type === 'ga_blame') {
+      await logAction('opp_chance', state.match.onCourt[0] || null, {
+        result: 'gol',
+        time: evt.time,
+        period: evt.period,
+        autoFromGaBlame: true,
+        _chained: true,
+      });
+      return; // avoid double render+finishInsert
+    }
+    // assist_goal → prompt the user for the scorer via a small picker modal.
+    // The modal is fire-and-forget; the chain event is created from inside
+    // handleAssistGoalPick(), also with _chained implicit via time/period.
+    if (type === 'assist_goal') {
+      finishInsertMode();
+      renderAll();
+      openAssistGoalModal(playerId, evt.time, evt.period);
+      return;
+    }
+    // duel_def_won → ask if there was a recovery.
+    if (type === 'duel_def_won') {
+      finishInsertMode();
+      renderAll();
+      // Deferred so the current render finishes before showing the dialog
+      setTimeout(async () => {
+        if (confirm('¿Hubo recuperación tras ganar el duelo?')) {
+          await logAction('recovery', playerId, {
+            time: evt.time,
+            period: evt.period,
+            autoFromDuel: true,
+            _chained: true,
+          });
+        }
+      }, 50);
+      return;
+    }
+    // duel_off_lost → ask if there was a turnover (pérdida).
+    if (type === 'duel_off_lost') {
+      finishInsertMode();
+      renderAll();
+      setTimeout(async () => {
+        if (confirm('¿Hubo pérdida tras el duelo perdido?')) {
+          await logAction('loss', playerId, {
+            time: evt.time,
+            period: evt.period,
+            autoFromDuel: true,
+            _chained: true,
+          });
+        }
+      }, 50);
+      return;
+    }
+  }
+
   finishInsertMode();
   renderAll();
+}
+
+// Opponent chance: thin wrapper around logAction that keeps the old call sites
+// working (e.g. handleResultPick and the "Chance rival" prompt). All the score
+// and sanction logic lives inside logAction now.
+async function logOpponentChance(result) {
+  await logAction('opp_chance', state.match.onCourt[0] || null, {result});
 }
 
 // Opponent foul: single tap, no player.
@@ -3901,6 +4137,7 @@ async function logOpponentFoul() {
     onCourt: [...state.match.onCourt],
     juego5For: !!state.match.juego5For,
     juego5Against: !!state.match.juego5Against,
+    atkDef: !!state.match.attackDefenseActive,
   };
   state.match.events.push(evt);
   await saveEvent(evt);
@@ -3972,6 +4209,332 @@ async function setJuego5(side) {
 }
 
 // ============================================================
+// ATAQUE / DEFENSA MODE
+// ============================================================
+// A pair = {attackerId, defenderId}. One of the two is on the court at any
+// moment (usually starts with the attacker on court while attacking, then
+// swapped for the defender when the phase flips). Max 2 pairs simultaneously.
+// While the mode is active every new event carries `atkDef: true`.
+
+// Get the pair (if any) that a given player belongs to. Returns
+// { pair, idx, role: 'attacker'|'defender' } or null.
+function findAtkDefPairForPlayer(playerId) {
+  if (!state.match || !state.match.attackDefenseActive || !playerId) return null;
+  const pairs = state.match.attackDefensePairs || [];
+  for (let i = 0; i < pairs.length; i++) {
+    const p = pairs[i];
+    if (p.attackerId === playerId) return { pair: p, idx: i, role: 'attacker' };
+    if (p.defenderId === playerId) return { pair: p, idx: i, role: 'defender' };
+  }
+  return null;
+}
+
+// Return the "other side" of a pair given a player.
+function partnerInPair(playerId) {
+  const found = findAtkDefPairForPlayer(playerId);
+  if (!found) return null;
+  return found.role === 'attacker' ? found.pair.defenderId : found.pair.attackerId;
+}
+
+// Remove a pair from the active list and let the user know why.
+// `reason` is a short string like "cambio manual" or "expulsión".
+async function breakAtkDefPair(pairIdx, reason, silent = false) {
+  if (!state.match || !state.match.attackDefensePairs[pairIdx]) return;
+  const p = state.match.attackDefensePairs[pairIdx];
+  const att = getPlayer(p.attackerId);
+  const def = getPlayer(p.defenderId);
+  state.match.attackDefensePairs.splice(pairIdx, 1);
+  // If no pairs remain, also switch the mode off (nothing to rotate).
+  if (state.match.attackDefensePairs.length === 0) {
+    state.match.attackDefenseActive = false;
+  }
+  await saveCurrentMatch();
+  if (!silent) {
+    // Deferred alert so we don't block the UI in the middle of the sub/expulsion flow.
+    const attTxt = att ? `${displayName(att)} (#${att.number ?? '·'})` : '?';
+    const defTxt = def ? `${displayName(def)} (#${def.number ?? '·'})` : '?';
+    setTimeout(() => alert(`Pareja Ataque/Defensa deshecha (${reason}): ${attTxt} ⇆ ${defTxt}.`), 30);
+  }
+}
+
+// Called by substitute() and expelPlayer() with the id of a player leaving
+// the court or being sent off. If they're in a pair AND the change is not
+// an atkDef fast swap, the pair breaks. `isAtkDefSwap` is set to true from
+// inside the fast-swap flow so pairs survive. `silent` suppresses the alert
+// (used when the user already confirmed the break in a preceding dialog).
+async function maybeBreakPairsFor(playerIdOut, playerIdIn, isAtkDefSwap, silent = false) {
+  if (isAtkDefSwap) return;
+  if (!state.match || !state.match.attackDefenseActive) return;
+  // Iterate backwards because breakAtkDefPair splices in place.
+  const pairs = state.match.attackDefensePairs || [];
+  for (let i = pairs.length - 1; i >= 0; i--) {
+    const p = pairs[i];
+    const touches = (playerIdOut && (p.attackerId === playerIdOut || p.defenderId === playerIdOut))
+                 || (playerIdIn  && (p.attackerId === playerIdIn  || p.defenderId === playerIdIn));
+    if (touches) await breakAtkDefPair(i, 'cambio manual o expulsión', silent);
+  }
+}
+
+// Activate the mode after the user confirmed pairs in the config modal.
+async function activateAtkDef(pairs) {
+  if (!state.match) return;
+  // Basic validation: pairs is [{attackerId, defenderId}], both must exist,
+  // both must NOT be the same, no duplicated players across pairs.
+  const seen = new Set();
+  for (const p of pairs) {
+    if (!p.attackerId || !p.defenderId || p.attackerId === p.defenderId) return;
+    if (seen.has(p.attackerId) || seen.has(p.defenderId)) return;
+    seen.add(p.attackerId); seen.add(p.defenderId);
+  }
+  state.match.attackDefensePairs = pairs.map(p => ({...p}));
+  state.match.attackDefenseActive = pairs.length > 0;
+  await saveCurrentMatch();
+  renderAll();
+}
+
+// Deactivate: clears the mode and drops all pairs.
+async function deactivateAtkDef() {
+  if (!state.match) return;
+  state.match.attackDefenseActive = false;
+  state.match.attackDefensePairs = [];
+  await saveCurrentMatch();
+  renderAll();
+}
+
+// Render the orange pairs panel above the bench list. Each pair shows both
+// players side-by-side, marking who's on court (green pill, non-interactive)
+// and who's on the bench (blue pill, tap to fast-swap). If the mode is off,
+// the container is hidden.
+function renderAtkDefPairsPanel() {
+  const container = document.getElementById('atkDefPairsPanel');
+  if (!container) return;
+  const active = state.match && state.match.attackDefenseActive;
+  const pairs = (state.match?.attackDefensePairs || []);
+  if (!active || pairs.length === 0) {
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+  container.style.display = '';
+  const rows = pairs.map((p, idx) => {
+    const att = getPlayer(p.attackerId);
+    const def = getPlayer(p.defenderId);
+    if (!att || !def) return '';
+    const attOnCourt = state.match.onCourt.includes(p.attackerId);
+    const defOnCourt = state.match.onCourt.includes(p.defenderId);
+    const slotHtml = (player, role, onCourt) => {
+      const roleLabel = role === 'attacker' ? '⚔️ATQ' : '🛡️DEF';
+      const cls = onCourt ? 'on-court' : 'on-bench';
+      const dataAttr = onCourt ? '' : `data-swappair="${idx}"`;
+      const title = onCourt
+        ? 'En pista ahora (no se puede tocar)'
+        : `Tocar para cambiar: entra ${displayName(player)}, sale ${displayName(onCourt ? player : (role==='attacker' ? def : att))}`;
+      return `<div class="atkdef-slot ${cls}" ${dataAttr} title="${escapeHtml(title)}">
+        <span class="adnum">${player.number ?? '·'}</span>
+        <span>${escapeHtml(displayName(player))}</span>
+        <span class="adrole">${roleLabel}</span>
+      </div>`;
+    };
+    return `<div class="atkdef-pair">
+      ${slotHtml(att, 'attacker', attOnCourt)}
+      <span class="atkdef-swap-arrow">⇆</span>
+      ${slotHtml(def, 'defender', defOnCourt)}
+    </div>`;
+  }).filter(Boolean).join('');
+
+  container.innerHTML = `
+    <div class="atkdef-pairs-panel">
+      <div class="atkdef-header">
+        <span>⚔️ ATAQUE / DEFENSA · ${pairs.length}/2 parejas</span>
+        <button class="btn btn-ghost btn-tiny" id="atkDefDeactivateBtn" title="Desactivar el modo">✕ Desactivar</button>
+      </div>
+      ${rows}
+    </div>
+  `;
+  // Wire click on bench slots (fast swap) + deactivate button
+  container.querySelectorAll('[data-swappair]').forEach(el => {
+    el.addEventListener('click', async () => {
+      const idx = parseInt(el.dataset.swappair, 10);
+      await fastSwapAtkDefPair(idx);
+    });
+  });
+  const deactBtn = document.getElementById('atkDefDeactivateBtn');
+  if (deactBtn) {
+    deactBtn.addEventListener('click', async () => {
+      if (confirm('¿Desactivar el modo Ataque/Defensa? Las parejas se descartarán.')) {
+        await deactivateAtkDef();
+      }
+    });
+  }
+}
+
+// Fast swap: one player of a pair is on court, the other is on the bench.
+// Tapping the bench player triggers this: the on-court player leaves the
+// pitch, the bench partner takes their slot. Uses substitute() with the
+// isAtkDefSwap flag so the pair doesn't break.
+async function fastSwapAtkDefPair(pairIdx) {
+  const p = state.match.attackDefensePairs[pairIdx];
+  if (!p) return;
+  const attOnCourt = state.match.onCourt.includes(p.attackerId);
+  const defOnCourt = state.match.onCourt.includes(p.defenderId);
+  let inPlayerId, outPlayerId;
+  if (attOnCourt && !defOnCourt) {
+    outPlayerId = p.attackerId;
+    inPlayerId = p.defenderId;
+  } else if (defOnCourt && !attOnCourt) {
+    outPlayerId = p.defenderId;
+    inPlayerId = p.attackerId;
+  } else {
+    // Weird state (both on court, or neither) — surface it and break the pair.
+    alert('Estado inconsistente en la pareja Ataque/Defensa. Se deshace la pareja para evitar errores.');
+    await breakAtkDefPair(pairIdx, 'estado inconsistente');
+    return;
+  }
+  const slot = state.match.onCourt.indexOf(outPlayerId);
+  if (slot < 0) return;
+  doSubstitution(slot, inPlayerId, {isAtkDefSwap: true});
+}
+
+// ---- Config modal ----
+// Local working state so cancelling the modal doesn't touch the real match.
+let atkDefDraft = [];
+
+function openAtkDefModal() {
+  // Copy current pairs into a working draft (or start with 1 empty row).
+  const existing = state.match.attackDefensePairs || [];
+  atkDefDraft = existing.length
+    ? existing.map(p => ({...p}))
+    : [{attackerId: null, defenderId: null}];
+  renderAtkDefConfig();
+  document.getElementById('atkDefModal').style.display = 'flex';
+}
+function closeAtkDefModal() {
+  atkDefDraft = [];
+  document.getElementById('atkDefModal').style.display = 'none';
+}
+
+// Render one row per pair, each with two selectors + a delete button.
+// The dropdowns show ALL eligible players (roster minus expelled), tagged
+// with whether they're on court or on the bench, so Toni can pair anyone.
+function renderAtkDefConfig() {
+  const container = document.getElementById('atkDefPairsConfig');
+  const eligible = state.roster.filter(p => !(state.match.expelledPlayers || []).includes(p.id));
+  // Build option HTML once, we'll reuse it in every dropdown.
+  const optionHtml = (selectedId) => {
+    return `<option value="">— Elige —</option>` + eligible.map(p => {
+      const onCourt = state.match.onCourt.includes(p.id);
+      const tag = onCourt ? '🟢 pista' : '⚪ banco';
+      return `<option value="${p.id}" ${selectedId === p.id ? 'selected' : ''}>${p.number ?? '·'} · ${escapeHtml(displayName(p))} — ${tag}</option>`;
+    }).join('');
+  };
+
+  container.innerHTML = atkDefDraft.map((pair, i) => `
+    <div class="panel" style="padding:10px; margin-bottom:8px; background:#fff7ed; border:1px solid #fed7aa;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <div style="font-weight:700; color:#9a3412;">Pareja ${i + 1}</div>
+        <button class="btn btn-ghost btn-tiny" data-atkdef-del="${i}" title="Quitar esta pareja">✕</button>
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <div>
+          <label style="display:block; font-size:10px; color:#5b6776; margin-bottom:4px;">⚔️ ATACANTE</label>
+          <select class="form-input" data-atkdef-att="${i}">${optionHtml(pair.attackerId)}</select>
+        </div>
+        <div>
+          <label style="display:block; font-size:10px; color:#5b6776; margin-bottom:4px;">🛡️ DEFENSOR</label>
+          <select class="form-input" data-atkdef-def="${i}">${optionHtml(pair.defenderId)}</select>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  // Wire selectors and delete buttons
+  container.querySelectorAll('[data-atkdef-att]').forEach(sel => {
+    sel.addEventListener('change', e => {
+      const i = parseInt(e.target.dataset.atkdefAtt, 10);
+      atkDefDraft[i].attackerId = e.target.value || null;
+    });
+  });
+  container.querySelectorAll('[data-atkdef-def]').forEach(sel => {
+    sel.addEventListener('change', e => {
+      const i = parseInt(e.target.dataset.atkdefDef, 10);
+      atkDefDraft[i].defenderId = e.target.value || null;
+    });
+  });
+  container.querySelectorAll('[data-atkdef-del]').forEach(b => {
+    b.addEventListener('click', e => {
+      const i = parseInt(e.currentTarget.dataset.atkdefDel, 10);
+      atkDefDraft.splice(i, 1);
+      if (atkDefDraft.length === 0) atkDefDraft.push({attackerId: null, defenderId: null});
+      renderAtkDefConfig();
+    });
+  });
+
+  // Enable/disable "+ Añadir pareja" — max 2
+  const addBtn = document.getElementById('atkDefAddPairBtn');
+  if (addBtn) {
+    if (atkDefDraft.length >= 2) {
+      addBtn.disabled = true;
+      addBtn.style.opacity = '0.5';
+      addBtn.textContent = 'Máx 2 parejas';
+    } else {
+      addBtn.disabled = false;
+      addBtn.style.opacity = '';
+      addBtn.textContent = '+ Añadir pareja';
+    }
+  }
+}
+
+// Validate the draft and activate the mode. Rules:
+//  - Each pair must have both attacker and defender selected, and distinct.
+//  - No player can be in more than one pair.
+//  - For each pair, exactly one of the two must currently be on court
+//    (otherwise fast-swap is impossible).
+async function submitAtkDefConfig() {
+  // Drop pairs left half-empty
+  const pairs = atkDefDraft.filter(p => p.attackerId && p.defenderId);
+  if (pairs.length === 0) {
+    alert('Añade al menos una pareja con atacante y defensor.');
+    return;
+  }
+  const seen = new Set();
+  for (const p of pairs) {
+    if (p.attackerId === p.defenderId) {
+      alert('El atacante y el defensor de una pareja deben ser jugadores distintos.');
+      return;
+    }
+    if (seen.has(p.attackerId) || seen.has(p.defenderId)) {
+      alert('Un jugador no puede estar en dos parejas a la vez.');
+      return;
+    }
+    seen.add(p.attackerId); seen.add(p.defenderId);
+    // Position check
+    const attOnCourt = state.match.onCourt.includes(p.attackerId);
+    const defOnCourt = state.match.onCourt.includes(p.defenderId);
+    if (attOnCourt === defOnCourt) {
+      const att = getPlayer(p.attackerId);
+      const def = getPlayer(p.defenderId);
+      alert(`En la pareja ${displayName(att)} / ${displayName(def)}: uno debe estar en pista y el otro en el banquillo. Ajusta los cambios y vuelve a activar el modo.`);
+      return;
+    }
+  }
+  closeAtkDefModal();
+  await activateAtkDef(pairs);
+}
+
+// Toggle the AtqDef button behaviour: activate opens config, active button
+// asks to deactivate.
+async function onAtkDefButtonClick() {
+  if (!state.match) return;
+  if (state.match.attackDefenseActive) {
+    if (confirm('¿Desactivar el modo Ataque/Defensa? Las parejas se descartarán.')) {
+      await deactivateAtkDef();
+    }
+  } else {
+    openAtkDefModal();
+  }
+}
+
+// ============================================================
 // CARDS & EXPULSIONS
 // ============================================================
 // Count team fouls (our fouls) in the current period.
@@ -4001,6 +4564,7 @@ async function logCard(cardType, personId, context) {
     onCourt: [...state.match.onCourt],
     juego5For: !!state.match.juego5For,
     juego5Against: !!state.match.juego5Against,
+    atkDef: !!state.match.attackDefenseActive,
     context: context || 'court',
   };
   state.match.events.push(evt);
@@ -4020,6 +4584,7 @@ async function logCard(cardType, personId, context) {
         onCourt: [...state.match.onCourt],
         juego5For: !!state.match.juego5For,
         juego5Against: !!state.match.juego5Against,
+        atkDef: !!state.match.attackDefenseActive,
         autoFromBenchCard: true,
       };
       state.match.events.push(foulEvt);
@@ -4052,6 +4617,9 @@ async function expelPlayer(playerId, context) {
   if (!state.match.expelledPlayers.includes(playerId)) {
     state.match.expelledPlayers.push(playerId);
   }
+  // If they're in an Atk/Def pair, break it (the sanction removes them from
+  // rotation and we can't keep pretending the pair is alive).
+  maybeBreakPairsFor(playerId, null, false);
   // Remove from court if currently playing (close out their minutes)
   const slot = state.match.onCourt.indexOf(playerId);
   if (slot >= 0) {
@@ -4152,24 +4720,65 @@ function goToDuelPlayerStep(kind) {
 
 async function logDuel(kind, playerId) {
   if (!kind || !playerId) return;
-  const {time, period} = getEventTimeAndPeriod();
-  const evt = {
-    id: 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
-    matchId: state.match.id,
-    type: kind, // e.g. 'duel_off_won'
-    playerId,
-    time,
-    period,
-    onCourt: [...state.match.onCourt],
-    juego5For: !!state.match.juego5For,
-    juego5Against: !!state.match.juego5Against,
-  };
-  state.match.events.push(evt);
-  await saveEvent(evt);
-  await saveCurrentMatch();
+  // Close the duel modal first so the confirm() dialog for chained recovery/loss
+  // opens cleanly on top. Delegate the actual event creation to logAction so
+  // duel_def_won → recovery? and duel_off_lost → loss? chains fire.
   closeDuelModal();
-  finishInsertMode();
-  renderAll();
+  await logAction(kind, playerId);
+}
+
+// ============================================================
+// ASSIST → GOAL FOLLOWUP
+// ============================================================
+// After the user registers an assist_goal we open a small modal to capture
+// the scorer at the same {time, period}. The scorer picker excludes the
+// assistant (they can't score off their own assist). There's a "skip" button
+// for the case when the goal was already registered separately.
+let assistGoalContext = null; // { assisterId, time, period }
+
+function openAssistGoalModal(assisterId, time, period) {
+  assistGoalContext = { assisterId, time, period };
+  const assister = getPlayer(assisterId);
+  const hint = document.getElementById('assistGoalHint');
+  hint.textContent = assister
+    ? `Asistencia de ${displayName(assister)} (#${assister.number ?? '·'}). ¿A quién se la dio?`
+    : 'Elige el jugador que marcó el gol tras la asistencia.';
+
+  // Candidates: on-court players except the assister. Order = slot order.
+  const list = document.getElementById('assistGoalList');
+  const slotIds = state.match.onCourt.filter(pid => pid && pid !== assisterId);
+  const players = slotIds.map(pid => getPlayer(pid)).filter(Boolean);
+  if (players.length === 0) {
+    list.innerHTML = '<div style="grid-column:1/-1; padding:20px; text-align:center; color:#5b6776;">No hay otros jugadores en pista para atribuir el gol.</div>';
+  } else {
+    list.innerHTML = players.map(p => {
+      const gkCls = state.match.onCourt[0] === p.id ? ' gk' : '';
+      return `<button class="player-card${gkCls}" data-assistgoal="${p.id}">
+        <div class="player-num">${p.number ?? '·'}</div>
+        <div class="player-name-card">${escapeHtml(displayName(p))}</div>
+      </button>`;
+    }).join('');
+    list.querySelectorAll('[data-assistgoal]').forEach(b => {
+      b.addEventListener('click', () => handleAssistGoalPick(b.dataset.assistgoal));
+    });
+  }
+  document.getElementById('assistGoalModal').style.display = 'flex';
+}
+function closeAssistGoalModal() {
+  assistGoalContext = null;
+  document.getElementById('assistGoalModal').style.display = 'none';
+}
+async function handleAssistGoalPick(scorerId) {
+  if (!assistGoalContext) return;
+  const ctx = assistGoalContext;
+  closeAssistGoalModal();
+  await logAction('chance', scorerId, {
+    result: 'gol',
+    time: ctx.time,
+    period: ctx.period,
+    autoFromAssist: true,
+    assistedById: ctx.assisterId,
+  });
 }
 
 // ============================================================
@@ -4178,21 +4787,28 @@ async function logDuel(kind, playerId) {
 // State machine kept in a single object so we can back-navigate cleanly.
 let penaltyWizard = null;
 
-function openPenaltyPicker() {
+function openPenaltyPicker(opts = {}) {
   // Warn if fewer than 5 on court, same as other actions.
   const playing = state.match.onCourt.filter(Boolean).length;
   if (playing < 5) {
-    if (!confirm(`Solo hay ${playing}/5 jugadores en pista. ¿Registrar el penalti igualmente?`)) return;
+    const label = opts.isDouble ? 'doble penalti' : 'penalti';
+    if (!confirm(`Solo hay ${playing}/5 jugadores en pista. ¿Registrar el ${label} igualmente?`)) return;
   }
   penaltyWizard = {
+    isDouble: !!opts.isDouble,
     side: null,           // 'for' | 'against'
-    accumulatesFoul: null,// true | false
+    // Double penalty always accumulates as a foul (we're already at 5+ fouls,
+    // so the question doesn't add info — Toni asked to skip it and force yes).
+    accumulatesFoul: opts.isDouble ? true : null,
     provokerId: null,     // 'for' only
     shooterId: null,      // 'for' only
     fouledId: null,       // 'against' only
     gkId: null,           // 'against' only
     result: null,         // 'gol' | 'parada' | 'fuera'
   };
+  // Update the title so Toni knows which variant he's registering
+  const titleEl = document.getElementById('penaltyModalTitle');
+  if (titleEl) titleEl.textContent = opts.isDouble ? '🥅🥅 Doble penalti (10m)' : '🥅 Penalti';
   showPenaltyStep('side');
   document.getElementById('penaltyModal').style.display = 'flex';
 }
@@ -4296,6 +4912,7 @@ async function logPenalty(result) {
     matchId: state.match.id,
     type: 'penalty',
     side: w.side,                       // 'for' | 'against'
+    doublePenalty: !!w.isDouble,        // 10m double penalty (6th+ team foul)
     accumulatesFoul: !!w.accumulatesFoul,
     provokerId: w.side === 'for' ? w.provokerId : null,
     shooterId:  w.side === 'for' ? w.shooterId  : null,
@@ -4310,6 +4927,7 @@ async function logPenalty(result) {
     onCourt: [...state.match.onCourt],
     juego5For: !!state.match.juego5For,
     juego5Against: !!state.match.juego5Against,
+    atkDef: !!state.match.attackDefenseActive,
   };
   state.match.events.push(evt);
   await saveEvent(evt);
@@ -4341,6 +4959,7 @@ async function logPenalty(result) {
       onCourt: [...state.match.onCourt],
       juego5For: !!state.match.juego5For,
       juego5Against: !!state.match.juego5Against,
+      atkDef: !!state.match.attackDefenseActive,
       autoFromPenalty: true,
     };
     state.match.events.push(foulEvt);
@@ -4637,6 +5256,64 @@ async function undoEvent(eventId) {
   if (evt.type === 'sub') {
     if (!confirm('Esto solo elimina el registro del cambio. La sustitución en pista NO se revierte automáticamente; debes hacer el cambio inverso manualmente. ¿Continuar?')) return;
   }
+
+  // ga_blame → the paired opp_chance/gol at the same {time, period} was
+  // auto-generated. If it's still there, delete it too and revert the score.
+  // (Toni asked for the cascade in fase 3 of this session, so undoing the
+  // parent should undo the child; otherwise the scoreboard would be off.)
+  if (evt.type === 'ga_blame') {
+    const childIdx = state.match.events.findIndex(e =>
+      e.autoFromGaBlame && e.type === 'opp_chance' &&
+      e.time === evt.time && e.period === evt.period
+    );
+    if (childIdx >= 0) {
+      const child = state.match.events[childIdx];
+      if (child.result === 'gol') {
+        state.match.scoreAgainst = Math.max(0, state.match.scoreAgainst - 1);
+      }
+      await deleteEventFromDB(child.id);
+      state.match.events.splice(childIdx, 1);
+    }
+  }
+  // assist_goal → the paired chance/gol (autoFromAssist) at same {time, period}
+  // was created via the "who scored" modal. Same cascade logic.
+  if (evt.type === 'assist_goal') {
+    const childIdx = state.match.events.findIndex(e =>
+      e.autoFromAssist && e.type === 'chance' &&
+      e.time === evt.time && e.period === evt.period
+    );
+    if (childIdx >= 0) {
+      const child = state.match.events[childIdx];
+      if (child.result === 'gol') {
+        state.match.scoreFor = Math.max(0, state.match.scoreFor - 1);
+      }
+      await deleteEventFromDB(child.id);
+      state.match.events.splice(childIdx, 1);
+    }
+  }
+  // duel_def_won → paired recovery (autoFromDuel) at same {time, period}
+  if (evt.type === 'duel_def_won') {
+    const childIdx = state.match.events.findIndex(e =>
+      e.autoFromDuel && e.type === 'recovery' &&
+      e.time === evt.time && e.period === evt.period && e.playerId === evt.playerId
+    );
+    if (childIdx >= 0) {
+      await deleteEventFromDB(state.match.events[childIdx].id);
+      state.match.events.splice(childIdx, 1);
+    }
+  }
+  // duel_off_lost → paired loss (autoFromDuel) at same {time, period}
+  if (evt.type === 'duel_off_lost') {
+    const childIdx = state.match.events.findIndex(e =>
+      e.autoFromDuel && e.type === 'loss' &&
+      e.time === evt.time && e.period === evt.period && e.playerId === evt.playerId
+    );
+    if (childIdx >= 0) {
+      await deleteEventFromDB(state.match.events[childIdx].id);
+      state.match.events.splice(childIdx, 1);
+    }
+  }
+
   // Reverse score effects
   if (evt.type === 'chance' && evt.result === 'gol') {
     state.match.scoreFor = Math.max(0, state.match.scoreFor - 1);
@@ -5070,6 +5747,16 @@ function renderClock() {
   // Body class for the dashed-slot visual cue when either J5 is on
   document.body.classList.toggle('j5-on', !!state.match.juego5For || !!state.match.juego5Against);
 
+  // AtqDef button: highlighted orange when the mode is active
+  const atkDefBtn = document.getElementById('atkDefBtn');
+  if (atkDefBtn) {
+    const active = !!state.match.attackDefenseActive;
+    atkDefBtn.classList.toggle('atkdef-active', active);
+    // Show a hint in the label about how many pairs are active
+    const nPairs = (state.match.attackDefensePairs || []).length;
+    atkDefBtn.textContent = active ? `⚔️ AtqDef · ${nPairs}` : '⚔️ AtqDef';
+  }
+
   // Fouls counters for the CURRENT period (reset to 0 each period)
   const period = state.match.timer.period;
   let foulsFor = 0, foulsAgainst = 0;
@@ -5255,19 +5942,31 @@ function buildEventRow(evt) {
     const outTxt = pOut ? escapeHtml(displayName(pOut)) : '(hueco)';
     label = `🔄 Cambio: ${outTxt} → ${inTxt}`;
   } else if (evt.type === 'penalty') {
-    // Penalty: side + result. Include shooter/GK name where meaningful.
+    // Penalty: side + result. Include a distinct prefix for double penalty (10m).
     const sideTxt = evt.side === 'for' ? '⚡ A favor' : '🛑 En contra';
     let resTxt = '';
     if (evt.result === 'gol') resTxt = '⚽ Gol';
     else if (evt.result === 'parada') resTxt = '🧤 Parada';
     else resTxt = '❌ Fallado';
     const foulTxt = evt.accumulatesFoul ? ' · +falta' : '';
-    label = `🥅 Penalti ${sideTxt} · ${resTxt}${foulTxt}`;
+    const prefix = evt.doublePenalty ? '🥅🥅 Doble penalti (10m)' : '🥅 Penalti';
+    label = `${prefix} ${sideTxt} · ${resTxt}${foulTxt}`;
   }
   // J5 marker on the row (so we know if it happened during a power play)
   let j5mark = '';
   if (evt.juego5For) j5mark = '<span class="j5-mark for" title="Jugando de 5 a favor">5⚡</span>';
   else if (evt.juego5Against) j5mark = '<span class="j5-mark against" title="Defendiendo contra 5">5🛡️</span>';
+
+  // AtqDef marker: shown when this event happened while the mode was active.
+  // If the sub itself was a fast pair-swap, use a slightly distinct label.
+  let atkDefMark = '';
+  if (evt.atkDef) {
+    if (evt.type === 'sub' && evt.atkDefSwap) {
+      atkDefMark = '<span class="atkdef-mark" title="Swap rápido de pareja Ataque/Defensa">⚔️SWAP</span>';
+    } else {
+      atkDefMark = '<span class="atkdef-mark" title="Modo Ataque/Defensa activo">⚔️A/D</span>';
+    }
+  }
 
   // Video-stopwatch time (if the event was recorded while the aux stopwatch was running)
   let videoMark = '';
@@ -5281,7 +5980,7 @@ function buildEventRow(evt) {
   div.innerHTML = `
     <span class="event-time" data-evt-time="${evt.id}" style="cursor:pointer; text-decoration:underline dotted; text-decoration-color:#cbd5e1;" title="Tocar para corregir el tiempo">${periodLabel} ${formatCountdown(evt.time)}</span>
     ${videoMark}
-    <span class="event-type">${label} ${j5mark}</span>
+    <span class="event-type">${label} ${j5mark}${atkDefMark}</span>
     <span class="event-player">${player ? escapeHtml(displayName(player)) : ''}</span>
     <button class="event-edit" data-id="${evt.id}" title="Editar">✏️</button>
     <button class="event-undo" data-id="${evt.id}" title="Deshacer">↩</button>
@@ -6795,6 +7494,12 @@ function renderBench() {
   const titleEl = document.getElementById('benchTitle');
   if (!list) return;
 
+  // Render the Atk/Def pairs panel (if the mode is active) as a sibling on top
+  // of the bench. Rebuild it every render so it reflects the current on-court
+  // state — for each pair we know which of the two is on the pitch right now
+  // and expose the other as a big tap-target for the fast swap.
+  renderAtkDefPairsPanel();
+
   const convokedIds = getConvokedPlayerIds();
   const onCourtIds = new Set(state.match.onCourt.filter(Boolean));
 
@@ -7433,7 +8138,8 @@ document.getElementById('duelBackBtn').addEventListener('click', () => {
 });
 
 // Penalty button → open the multi-step wizard
-document.getElementById('penaltyBtn').addEventListener('click', openPenaltyPicker);
+document.getElementById('penaltyBtn').addEventListener('click', () => openPenaltyPicker());
+document.getElementById('doublePenaltyBtn').addEventListener('click', () => openPenaltyPicker({isDouble: true}));
 document.getElementById('closePenaltyModal').addEventListener('click', closePenaltyPicker);
 document.getElementById('penaltyModal').addEventListener('click', e => {
   if (e.target.id === 'penaltyModal') closePenaltyPicker();
@@ -7443,10 +8149,16 @@ document.querySelectorAll('#penStepSide [data-penside]').forEach(b => {
   b.addEventListener('click', () => {
     if (!penaltyWizard) return;
     penaltyWizard.side = b.dataset.penside;
-    showPenaltyStep('foul');
+    // For double penalty we skip the "accumulates foul?" step (always yes).
+    if (penaltyWizard.isDouble) {
+      if (penaltyWizard.side === 'for') showPenaltyStep('provoker');
+      else showPenaltyStep('fouled');
+    } else {
+      showPenaltyStep('foul');
+    }
   });
 });
-// Step 2 (accumulates foul?)
+// Step 2 (accumulates foul?) — normal penalty only
 document.querySelectorAll('#penStepFoul [data-penfoul]').forEach(b => {
   b.addEventListener('click', () => {
     if (!penaltyWizard) return;
@@ -7456,11 +8168,16 @@ document.querySelectorAll('#penStepFoul [data-penfoul]').forEach(b => {
     else showPenaltyStep('fouled');
   });
 });
-// Back buttons — each rewinds one step
+// Back buttons — each rewinds one step. Provoker/Fouled backs are adjusted
+// so double-penalty flow jumps back to Side (skipping Foul).
 document.getElementById('penBackFoul').addEventListener('click', () => showPenaltyStep('side'));
-document.getElementById('penBackProvoker').addEventListener('click', () => showPenaltyStep('foul'));
+document.getElementById('penBackProvoker').addEventListener('click', () => {
+  showPenaltyStep(penaltyWizard?.isDouble ? 'side' : 'foul');
+});
 document.getElementById('penBackShooter').addEventListener('click', () => showPenaltyStep('provoker'));
-document.getElementById('penBackFouled').addEventListener('click', () => showPenaltyStep('foul'));
+document.getElementById('penBackFouled').addEventListener('click', () => {
+  showPenaltyStep(penaltyWizard?.isDouble ? 'side' : 'foul');
+});
 document.getElementById('penBackGK').addEventListener('click', () => showPenaltyStep('fouled'));
 document.getElementById('penBackResult').addEventListener('click', () => {
   // From result, go back to the last player-picker of the branch
@@ -7474,6 +8191,19 @@ document.querySelectorAll('#penStepResult [data-penresult]').forEach(b => {
 
 // Live stats modal (in-match team/player breakdown with 1P/2P/Total filter)
 document.getElementById('liveStatsBtn').addEventListener('click', openLiveStatsModal);
+
+// AtqDef mode: topbar toggle + config modal
+document.getElementById('atkDefBtn').addEventListener('click', onAtkDefButtonClick);
+document.getElementById('closeAtkDefModal').addEventListener('click', closeAtkDefModal);
+document.getElementById('atkDefModal').addEventListener('click', e => {
+  if (e.target.id === 'atkDefModal') closeAtkDefModal();
+});
+document.getElementById('atkDefAddPairBtn').addEventListener('click', () => {
+  if (atkDefDraft.length >= 2) return;
+  atkDefDraft.push({attackerId: null, defenderId: null});
+  renderAtkDefConfig();
+});
+document.getElementById('atkDefActivateBtn').addEventListener('click', submitAtkDefConfig);
 document.getElementById('closeLiveStatsModal').addEventListener('click', closeLiveStatsModal);
 document.getElementById('liveStatsModal').addEventListener('click', e => {
   if (e.target.id === 'liveStatsModal') closeLiveStatsModal();
@@ -7499,6 +8229,16 @@ document.getElementById('chronicleModal').addEventListener('click', e => {
 document.getElementById('chronicleSaveMvpBtn').addEventListener('click', saveChronicleMvp);
 document.getElementById('chronicleRefreshBtn').addEventListener('click', refreshChronicleText);
 document.getElementById('chronicleCopyBtn').addEventListener('click', copyChronicleToClipboard);
+
+// Assist → scorer picker modal
+document.getElementById('closeAssistGoalModal').addEventListener('click', closeAssistGoalModal);
+document.getElementById('assistGoalModal').addEventListener('click', e => {
+  if (e.target.id === 'assistGoalModal') closeAssistGoalModal();
+});
+document.getElementById('assistGoalSkipBtn').addEventListener('click', () => {
+  // The user says the goal was already recorded → don't chain, just close.
+  closeAssistGoalModal();
+});
 // Delegate clicks on person chips
 ['cardCourtList','cardBenchList','cardStaffList'].forEach(id => {
   document.getElementById(id).addEventListener('click', async (e) => {
