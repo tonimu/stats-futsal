@@ -4561,8 +4561,11 @@ function renderAtkDefPairsPanel() {
     };
     // Time this pair has been active (running counter). If activatedAt is
     // missing (very old sessions), we just show — instead of a bogus time.
+    // Time this pair has been active (running counter). formatTime gives a
+    // plain MM:SS duration; formatCountdown (used for the match clock) would
+    // subtract from the period length and show 17:00 instead of 03:00.
     const activeSec = (typeof p.activatedAt === 'number') ? Math.max(0, now - p.activatedAt) : null;
-    const timeTxt = activeSec != null ? formatCountdown(activeSec) : '—';
+    const timeTxt = activeSec != null ? formatTime(activeSec) : '—';
     return `<div class="atkdef-pair">
       ${slotHtml(att, 'attacker', attOnCourt)}
       <div class="atkdef-center">
@@ -6313,6 +6316,13 @@ function buildEventTableRow(evt) {
   const player = evt.playerId ? getPlayer(evt.playerId) : null;
   const periodLabel = evt.period === 1 ? '1ªP' : '2ªP';
 
+  // Penalty is rendered as TWO rows (Toni asked for it): one for the
+  // provoker/committer, one for the shooter/GK with the result. Both rows
+  // share the same evt.id so ✏️ and ↩ still act on the whole penalty.
+  if (evt.type === 'penalty') {
+    return buildPenaltyRows(evt);
+  }
+
   // Label / player rendering — same logic used by the old card renderer but
   // packed into fewer chars, since the table is narrow.
   let label = actionLabel(evt.type);
@@ -6340,14 +6350,6 @@ function buildEventTableRow(evt) {
     const inTxt = pIn ? escapeHtml(displayName(pIn)) : '(hueco)';
     const outTxt = pOut ? escapeHtml(displayName(pOut)) : '(hueco)';
     label = `🔄 ${outTxt} → ${inTxt}`;
-  } else if (evt.type === 'penalty') {
-    const sideTxt = evt.side === 'for' ? '⚡ Favor' : '🛑 Contra';
-    let resTxt = evt.result === 'gol' ? '⚽ Gol'
-              : evt.result === 'parada' ? '🧤 Parada'
-              : '❌ Fallo';
-    const foulTxt = evt.accumulatesFoul ? ' +falta' : '';
-    const prefix = evt.doublePenalty ? '🥅🥅 Doble pen.' : '🥅 Pen.';
-    label = `${prefix} ${sideTxt} · ${resTxt}${foulTxt}`;
   }
 
   // Marks column (small icon-y flags). Kept short so it doesn't crowd the row.
@@ -6367,28 +6369,9 @@ function buildEventTableRow(evt) {
     marks.push(`<span class="event-videotime" title="🎥 tiempo vídeo">🎥 ${String(vm).padStart(2,'0')}:${String(vs).padStart(2,'0')}</span>`);
   }
 
-  // Player column:
-  //  - Subs already name people in the label, so cell is empty
-  //  - Penalty needs to show BOTH roles (provoker + shooter, or fouler + GK)
-  //    because "who provokes / who takes" is what Toni wants to see at a glance
-  //  - Everything else shows the main actor
-  let playerCell = '';
-  if (isSub) {
-    playerCell = '';
-  } else if (evt.type === 'penalty') {
-    const pen = evt.doublePenalty ? 'doble penalti' : 'penalti';
-    const provTxt = (id, label) => {
-      const p = id ? getPlayer(id) : null;
-      return p ? `<div style="font-size:11px; color:#334155;">${label}: <b>${escapeHtml(displayName(p))}</b> (${p.number ?? '·'})</div>` : '';
-    };
-    if (evt.side === 'for') {
-      playerCell = provTxt(evt.provokerId, `Provoca ${pen}`) + provTxt(evt.shooterId, `Hace ${pen}`);
-    } else {
-      playerCell = provTxt(evt.fouledId, `Comete ${pen}`) + provTxt(evt.gkId, `Portero`);
-    }
-  } else {
-    playerCell = player ? escapeHtml(displayName(player)) : '';
-  }
+  // Player column: subs already name people in the label; everything else
+  // shows the main actor. Penalties never reach here (handled above).
+  const playerCell = isSub ? '' : (player ? escapeHtml(displayName(player)) : '');
 
   return `<tr class="${isSub ? 'sub-row' : ''}">
     <td class="col-time"><span data-evt-time="${evt.id}" style="cursor:pointer; text-decoration:underline dotted;" title="Tocar para corregir el tiempo">${periodLabel} ${formatCountdown(evt.time)}</span></td>
@@ -6400,6 +6383,80 @@ function buildEventTableRow(evt) {
       <button class="event-undo del" data-id="${evt.id}" title="Deshacer">↩</button>
     </td>
   </tr>`;
+}
+
+// Build the TWO rows that represent a penalty in the log:
+//   Row 1 = the provoker / committer of the foul
+//   Row 2 = the shooter with the result / the GK with the result
+// Both rows carry the same evt.id so editing or undoing either one operates
+// on the whole penalty event (data model stays single). Second row gets a
+// subtle top border to visually pair them.
+function buildPenaltyRows(evt) {
+  const periodLabel = evt.period === 1 ? '1ªP' : '2ªP';
+  const timeCell = `<td class="col-time"><span data-evt-time="${evt.id}" style="cursor:pointer; text-decoration:underline dotted;" title="Tocar para corregir el tiempo">${periodLabel} ${formatCountdown(evt.time)}</span></td>`;
+  const actionsCell = `<td class="col-actions">
+    <button class="event-edit" data-id="${evt.id}" title="Editar">✏️</button>
+    <button class="event-undo del" data-id="${evt.id}" title="Deshacer">↩</button>
+  </td>`;
+  // Shared marks (J5 / AtqDef / video) — shown only on the first row so the
+  // pair doesn't feel visually crowded.
+  const marks = [];
+  if (evt.juego5For) marks.push('<span class="j5-mark for" title="Juego de 5 a favor">5⚡</span>');
+  else if (evt.juego5Against) marks.push('<span class="j5-mark against" title="Contra 5">5🛡️</span>');
+  if (evt.atkDef) marks.push('<span class="atkdef-mark" title="Modo Ataque/Defensa activo">A/D</span>');
+  if (typeof evt.videoTime === 'number') {
+    const vm = Math.floor(evt.videoTime / 60);
+    const vs = Math.floor(evt.videoTime % 60);
+    marks.push(`<span class="event-videotime" title="🎥 tiempo vídeo">🎥 ${String(vm).padStart(2,'0')}:${String(vs).padStart(2,'0')}</span>`);
+  }
+  const foulTxt = evt.accumulatesFoul ? ' · +falta' : '';
+  const penTxt = evt.doublePenalty ? 'Doble penalti' : 'Penalti';
+  const emoji = evt.doublePenalty ? '🥅🥅' : '🥅';
+  const sideTxt = evt.side === 'for' ? '⚡ a favor' : '🛑 en contra';
+
+  let row1Label, row1PlayerId, row2Label, row2PlayerId, resTxt;
+  if (evt.result === 'gol') resTxt = '⚽ Gol';
+  else if (evt.result === 'parada') resTxt = '🧤 Parada';
+  else resTxt = '❌ Fallado';
+
+  if (evt.side === 'for') {
+    row1Label = `${emoji} Provoca ${penTxt.toLowerCase()} ${sideTxt}${foulTxt}`;
+    row1PlayerId = evt.provokerId;
+    row2Label = `${emoji} Tira ${penTxt.toLowerCase()} ${sideTxt} · ${resTxt}`;
+    row2PlayerId = evt.shooterId;
+  } else {
+    row1Label = `${emoji} Comete ${penTxt.toLowerCase()} ${sideTxt}${foulTxt}`;
+    row1PlayerId = evt.fouledId;
+    row2Label = `${emoji} Portero ${penTxt.toLowerCase()} ${sideTxt} · ${resTxt}`;
+    row2PlayerId = evt.gkId;
+  }
+  const nameOf = (pid) => {
+    const p = pid ? getPlayer(pid) : null;
+    return p ? `<b>${escapeHtml(displayName(p))}</b> (${p.number ?? '·'})` : '<span style="color:#94a3b8;">—</span>';
+  };
+
+  // First row: normal borders. Second row: dashed top border so the pair
+  // reads visually as a single group belonging to the same play.
+  const row1 = `<tr class="pen-row pen-row-1">
+    ${timeCell}
+    <td class="col-type">${row1Label}</td>
+    <td class="col-player">${nameOf(row1PlayerId)}</td>
+    <td class="col-marks">${marks.join(' ')}</td>
+    ${actionsCell}
+  </tr>`;
+  // Second row: reuse same evt.id in the buttons (so ✏️/↩ act on the whole
+  // penalty). Time cell is intentionally blank because it's the same instant.
+  const row2 = `<tr class="pen-row pen-row-2" style="border-top:1px dashed #e2e8f0;">
+    <td class="col-time"></td>
+    <td class="col-type">${row2Label}</td>
+    <td class="col-player">${nameOf(row2PlayerId)}</td>
+    <td class="col-marks"></td>
+    <td class="col-actions">
+      <button class="event-edit" data-id="${evt.id}" title="Editar el penalti completo">✏️</button>
+      <button class="event-undo del" data-id="${evt.id}" title="Deshacer el penalti completo">↩</button>
+    </td>
+  </tr>`;
+  return row1 + row2;
 }
 
 // Build a single event row element (used by both logs).
