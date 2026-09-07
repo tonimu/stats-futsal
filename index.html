@@ -497,6 +497,14 @@
     border-radius: 999px;
     font-size: 10px;
   }
+  /* The time pill deserves a bit more presence — it's the number Toni scans
+     most often during a match. */
+  .bench-item-stats .pill.time-pill {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 7px;
+    color: #0f172a;
+  }
   .bench-item-stats .pill.yellow { background: #92400e; color: #fde68a; }
   .bench-item-stats .pill.red { background: #7f1d1d; color: #fecaca; }
   .bench-empty {
@@ -574,8 +582,9 @@
     text-overflow: ellipsis;
   }
   .slot-time {
-    font-size: 11px;
-    color: #5b6776;
+    font-size: 13px;
+    font-weight: 700;
+    color: #334155;
     font-variant-numeric: tabular-nums;
   }
   .slot-empty-text {
@@ -1284,9 +1293,9 @@
   .atkdef-pair {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
-    gap: 8px;
+    gap: 10px;
     align-items: center;
-    padding: 6px;
+    padding: 8px;
     background: #fff;
     border-radius: 8px;
     margin-bottom: 6px;
@@ -1295,13 +1304,13 @@
   .atkdef-slot {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
-    border-radius: 6px;
-    border: 1px solid #fed7aa;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 2px solid #fed7aa;
     background: #fffbeb;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 14px;
     min-width: 0;
     transition: transform .05s ease, background .1s ease;
   }
@@ -1319,27 +1328,63 @@
     color: #1e40af;
   }
   .atkdef-slot.on-bench:hover { background: #bfdbfe; }
-  .atkdef-slot .adnum {
-    display: inline-block;
-    min-width: 22px;
-    padding: 1px 4px;
-    background: rgba(0,0,0,0.08);
-    border-radius: 4px;
-    text-align: center;
+  /* Right-side stack inside a slot: name on top, role below in small caps. */
+  .atkdef-slot-body {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    line-height: 1.1;
+    flex: 1;
+  }
+  .atkdef-slot .adname {
     font-weight: 700;
-    font-size: 11px;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .atkdef-slot .adnum {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    height: 30px;
+    padding: 0 6px;
+    background: rgba(0,0,0,0.08);
+    border-radius: 6px;
+    font-weight: 800;
+    font-size: 15px;
+    flex-shrink: 0;
   }
   .atkdef-slot .adrole {
-    font-size: 9px;
-    opacity: 0.7;
-    margin-left: 4px;
+    font-size: 10px;
+    opacity: 0.75;
     text-transform: uppercase;
     font-weight: 700;
+    letter-spacing: 0.04em;
+    margin-top: 2px;
+  }
+  /* Center column: swap arrow + running time of this pair. */
+  .atkdef-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 4px;
+    min-width: 60px;
   }
   .atkdef-swap-arrow {
-    font-size: 18px;
+    font-size: 22px;
     color: #ea580c;
-    padding: 0 4px;
+    line-height: 1;
+  }
+  .atkdef-pair-time {
+    font-size: 12px;
+    color: #9a3412;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    margin-top: 2px;
   }
   /* Mark events in the log that happened during AtqDef mode */
   .atkdef-mark {
@@ -2484,6 +2529,24 @@
     <div style="display:flex; gap:10px;">
       <button class="btn btn-ghost" id="chainConfirmNoBtn" style="flex:1; padding:14px; font-weight:700;">NO</button>
       <button class="btn btn-primary" id="chainConfirmYesBtn" style="flex:1; padding:14px; font-weight:700; background:#16a34a; border-color:#16a34a;">SÍ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SPECIALIST SUBSTITUTION MODAL (penalty specialists coming from bench) ===== -->
+<!-- Opens when Toni picks a bench player as shooter/GK for a penalty. Asks -->
+<!-- which on-court slot to sub the specialist into. The change is executed -->
+<!-- immediately and the penalty flow continues with the newly-on-court player.-->
+<div class="modal-backdrop" id="specialistSwapModal" style="display:none;">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-title">
+      <span id="specialistSwapTitle">Sustitución de especialista</span>
+      <button class="btn btn-ghost" id="closeSpecialistSwapModal">✕</button>
+    </div>
+    <div id="specialistSwapHint" style="font-size:13px; color:#334155; margin-bottom:14px; line-height:1.4;"></div>
+    <div id="specialistSwapList" class="player-grid"></div>
+    <div style="margin-top:10px; font-size:11px; color:#64748b;">
+      ⚠️ El especialista se quedará en pista después del penalti. Cuando quieras, haz otro cambio manual.
     </div>
   </div>
 </div>
@@ -4407,6 +4470,17 @@ async function maybeBreakPairsFor(playerIdOut, playerIdIn, isAtkDefSwap, silent 
 }
 
 // Activate the mode after the user confirmed pairs in the config modal.
+// Total match seconds elapsed since the opening whistle, ignoring the
+// half-time boundary. Used to time-stamp Atk/Def pair activations so we can
+// display "how long this pair has been active" as a single running counter
+// even if it spans across periods.
+function absoluteMatchTime() {
+  if (!state.match) return 0;
+  const PL = matchPeriodLength();
+  const period = state.match.timer?.period || 1;
+  return (period - 1) * PL + currentMatchSeconds();
+}
+
 async function activateAtkDef(pairs) {
   if (!state.match) return;
   // Basic validation: pairs is [{attackerId, defenderId}], both must exist,
@@ -4417,7 +4491,17 @@ async function activateAtkDef(pairs) {
     if (seen.has(p.attackerId) || seen.has(p.defenderId)) return;
     seen.add(p.attackerId); seen.add(p.defenderId);
   }
-  state.match.attackDefensePairs = pairs.map(p => ({...p}));
+  // Preserve activatedAt for pairs that already existed and were kept in the
+  // config (matched by attackerId+defenderId). New pairs get a fresh timestamp.
+  const now = absoluteMatchTime();
+  const oldPairs = state.match.attackDefensePairs || [];
+  state.match.attackDefensePairs = pairs.map(p => {
+    const existing = oldPairs.find(op => op.attackerId === p.attackerId && op.defenderId === p.defenderId);
+    return {
+      ...p,
+      activatedAt: existing?.activatedAt ?? now,
+    };
+  });
   state.match.attackDefenseActive = pairs.length > 0;
   await saveCurrentMatch();
   renderAll();
@@ -4447,6 +4531,7 @@ function renderAtkDefPairsPanel() {
     return;
   }
   container.style.display = '';
+  const now = absoluteMatchTime();
   const rows = pairs.map((p, idx) => {
     const att = getPlayer(p.attackerId);
     const def = getPlayer(p.defenderId);
@@ -4454,21 +4539,30 @@ function renderAtkDefPairsPanel() {
     const attOnCourt = state.match.onCourt.includes(p.attackerId);
     const defOnCourt = state.match.onCourt.includes(p.defenderId);
     const slotHtml = (player, role, onCourt) => {
-      const roleLabel = role === 'attacker' ? '⚔️ATQ' : '🛡️DEF';
+      const roleLabel = role === 'attacker' ? '⚔️ ATQ' : '🛡️ DEF';
       const cls = onCourt ? 'on-court' : 'on-bench';
       const dataAttr = onCourt ? '' : `data-swappair="${idx}"`;
       const title = onCourt
         ? 'En pista ahora (no se puede tocar)'
-        : `Tocar para cambiar: entra ${displayName(player)}, sale ${displayName(onCourt ? player : (role==='attacker' ? def : att))}`;
+        : `Tocar para cambiar: entra ${displayName(player)}`;
       return `<div class="atkdef-slot ${cls}" ${dataAttr} title="${escapeHtml(title)}">
         <span class="adnum">${player.number ?? '·'}</span>
-        <span>${escapeHtml(displayName(player))}</span>
-        <span class="adrole">${roleLabel}</span>
+        <div class="atkdef-slot-body">
+          <span class="adname">${escapeHtml(displayName(player))}</span>
+          <span class="adrole">${roleLabel}</span>
+        </div>
       </div>`;
     };
+    // Time this pair has been active (running counter). If activatedAt is
+    // missing (very old sessions), we just show — instead of a bogus time.
+    const activeSec = (typeof p.activatedAt === 'number') ? Math.max(0, now - p.activatedAt) : null;
+    const timeTxt = activeSec != null ? formatCountdown(activeSec) : '—';
     return `<div class="atkdef-pair">
       ${slotHtml(att, 'attacker', attOnCourt)}
-      <span class="atkdef-swap-arrow">⇆</span>
+      <div class="atkdef-center">
+        <span class="atkdef-swap-arrow">⇆</span>
+        <span class="atkdef-pair-time" title="Tiempo con esta pareja activa">${timeTxt}</span>
+      </div>
       ${slotHtml(def, 'defender', defOnCourt)}
     </div>`;
   }).filter(Boolean).join('');
@@ -4477,12 +4571,15 @@ function renderAtkDefPairsPanel() {
     <div class="atkdef-pairs-panel">
       <div class="atkdef-header">
         <span>⚔️ ATAQUE / DEFENSA · ${pairs.length}/2 parejas</span>
-        <button class="btn btn-ghost btn-tiny" id="atkDefDeactivateBtn" title="Desactivar el modo">✕ Desactivar</button>
+        <div style="display:flex; gap:6px;">
+          ${pairs.length < 2 ? '<button class="btn btn-ghost btn-tiny" id="atkDefAddPairInlineBtn" title="Añadir otra pareja">+ Añadir pareja</button>' : ''}
+          <button class="btn btn-ghost btn-tiny" id="atkDefDeactivateBtn" title="Desactivar el modo">✕ Desactivar</button>
+        </div>
       </div>
       ${rows}
     </div>
   `;
-  // Wire click on bench slots (fast swap) + deactivate button
+  // Wire click on bench slots (fast swap) + deactivate button + add-pair button
   container.querySelectorAll('[data-swappair]').forEach(el => {
     el.addEventListener('click', async () => {
       const idx = parseInt(el.dataset.swappair, 10);
@@ -4494,6 +4591,18 @@ function renderAtkDefPairsPanel() {
     deactBtn.addEventListener('click', async () => {
       if (confirm('¿Desactivar el modo Ataque/Defensa? Las parejas se descartarán.')) {
         await deactivateAtkDef();
+      }
+    });
+  }
+  const addBtn = document.getElementById('atkDefAddPairInlineBtn');
+  if (addBtn) {
+    addBtn.addEventListener('click', () => {
+      // Open the config modal preserving the existing pair(s) + an empty row
+      // so Toni just fills the new pair without redoing what's already there.
+      openAtkDefModal();
+      if (atkDefDraft.length < 2) {
+        atkDefDraft.push({attackerId: null, defenderId: null});
+        renderAtkDefConfig();
       }
     });
   }
@@ -5025,26 +5134,78 @@ function showPenaltyStep(step) {
 function renderPenaltyPlayerGrid(listId, step) {
   const list = document.getElementById(listId);
   if (!list) return;
+
   const onCourtIds = state.match.onCourt.filter(Boolean);
-  const players = onCourtIds.map(pid => getPlayer(pid)).filter(Boolean);
-  if (players.length === 0) {
-    list.innerHTML = '<div style="grid-column:1/-1; padding:20px; text-align:center; color:#5b6776;">Nadie en pista.</div>';
+  const onCourtPlayers = onCourtIds.map(pid => getPlayer(pid)).filter(Boolean);
+
+  // Only the "shooter" (favour) and "gk" (against) steps allow bench
+  // specialists — those are the players who actually take/face the penalty.
+  // For "provoker" / "fouled", it only makes sense to pick from the court.
+  const allowBench = (step === 'shooter' || step === 'gk');
+  const expelled = new Set(state.match.expelledPlayers || []);
+  const benchPlayers = allowBench
+    ? state.roster.filter(p => !onCourtIds.includes(p.id) && !expelled.has(p.id))
+      .sort((a, b) => (a.number || 99) - (b.number || 99))
+    : [];
+
+  if (onCourtPlayers.length === 0 && benchPlayers.length === 0) {
+    list.innerHTML = '<div style="grid-column:1/-1; padding:20px; text-align:center; color:#5b6776;">Sin jugadores disponibles.</div>';
     return;
   }
-  list.innerHTML = players.map(p => {
+
+  const buildCard = (p, opts = {}) => {
     const gkCls = state.match.onCourt[0] === p.id ? ' gk' : '';
-    return `<button class="player-card${gkCls}" data-penpick="${p.id}">
+    const benchAttr = opts.fromBench ? ' data-frombench="1"' : '';
+    const benchBadge = opts.fromBench
+      ? '<div style="font-size:9px; font-weight:800; color:#7c3aed; margin-top:2px; text-transform:uppercase; letter-spacing:0.05em;">⇧ Especialista</div>'
+      : '';
+    const borderStyle = opts.fromBench ? ' style="border:2px dashed #a855f7; background:#faf5ff;"' : '';
+    return `<button class="player-card${gkCls}" data-penpick="${p.id}"${benchAttr}${borderStyle}>
       <div class="player-num">${p.number ?? '·'}</div>
       <div class="player-name-card">${escapeHtml(displayName(p))}</div>
+      ${benchBadge}
     </button>`;
-  }).join('');
+  };
+
+  let html = '';
+  html += onCourtPlayers.map(p => buildCard(p, {fromBench: false})).join('');
+  if (benchPlayers.length > 0) {
+    // Separator row (spans the whole grid) + bench player cards
+    html += `<div style="grid-column:1/-1; margin:8px 0 4px; padding-top:8px; border-top:1px dashed #cbd5e1; font-size:11px; font-weight:700; color:#7c3aed; text-transform:uppercase; letter-spacing:0.05em;">
+      Especialistas del banquillo (entran a pista con un cambio)
+    </div>`;
+    html += benchPlayers.map(p => buildCard(p, {fromBench: true})).join('');
+  }
+  list.innerHTML = html;
+
   list.querySelectorAll('[data-penpick]').forEach(b => {
-    b.addEventListener('click', () => handlePenaltyPick(step, b.dataset.penpick));
+    b.addEventListener('click', () => {
+      const pid = b.dataset.penpick;
+      const fromBench = b.dataset.frombench === '1';
+      handlePenaltyPick(step, pid, fromBench);
+    });
   });
 }
 
-function handlePenaltyPick(step, playerId) {
+function handlePenaltyPick(step, playerId, fromBench = false) {
   if (!penaltyWizard) return;
+  // If the picked player is coming from the bench, we need to swap them onto
+  // the court first, THEN continue the wizard with their id. The specialist
+  // stays on court until Toni manually subs them out again.
+  if (fromBench) {
+    const roleLabel = step === 'shooter' ? 'chutador'
+                    : step === 'gk' ? 'portero'
+                    : 'jugador';
+    openSpecialistSwapModal(playerId, roleLabel, () => {
+      // After the swap completes, proceed with the wizard as if the specialist
+      // had been on-court all along.
+      _finishPenaltyPick(step, playerId);
+    });
+    return;
+  }
+  _finishPenaltyPick(step, playerId);
+}
+function _finishPenaltyPick(step, playerId) {
   if (step === 'provoker') {
     penaltyWizard.provokerId = playerId;
     showPenaltyStep('shooter');
@@ -5057,6 +5218,58 @@ function handlePenaltyPick(step, playerId) {
   } else if (step === 'gk') {
     penaltyWizard.gkId = playerId;
     showPenaltyStep('result');
+  }
+}
+
+// ---- Specialist substitution modal (bench → court for a penalty taker) ----
+let specialistSwapContext = null; // { specialistId, onDone }
+function openSpecialistSwapModal(specialistId, roleLabel, onDone) {
+  const p = getPlayer(specialistId);
+  if (!p) { onDone(); return; }
+  specialistSwapContext = { specialistId, onDone };
+  document.getElementById('specialistSwapTitle').textContent =
+    `⇄ ${displayName(p)} (#${p.number ?? '·'}) entra como ${roleLabel}`;
+  document.getElementById('specialistSwapHint').innerHTML =
+    `Elige a qué jugador de la pista sustituye <b>${escapeHtml(displayName(p))}</b>. Se registrará el cambio antes del penalti.`;
+
+  const list = document.getElementById('specialistSwapList');
+  const onCourtIds = state.match.onCourt.filter(Boolean);
+  const players = onCourtIds.map(pid => getPlayer(pid)).filter(Boolean);
+  list.innerHTML = players.map((cp, i) => {
+    const slot = state.match.onCourt.indexOf(cp.id);
+    const gkCls = slot === 0 ? ' gk' : '';
+    return `<button class="player-card${gkCls}" data-outslot="${slot}">
+      <div class="player-num">${cp.number ?? '·'}</div>
+      <div class="player-name-card">${escapeHtml(displayName(cp))}</div>
+    </button>`;
+  }).join('');
+  list.querySelectorAll('[data-outslot]').forEach(b => {
+    b.addEventListener('click', () => {
+      const slot = parseInt(b.dataset.outslot, 10);
+      handleSpecialistSwapPick(slot);
+    });
+  });
+  document.getElementById('specialistSwapModal').style.display = 'flex';
+}
+function closeSpecialistSwapModal() {
+  specialistSwapContext = null;
+  document.getElementById('specialistSwapModal').style.display = 'none';
+}
+function handleSpecialistSwapPick(slot) {
+  if (!specialistSwapContext) return;
+  const ctx = specialistSwapContext;
+  closeSpecialistSwapModal();
+  // Execute the sub. This may trigger the Atk/Def "¿romper pareja?" prompt
+  // via doSubstitution's guard — if the user cancels, the specialist doesn't
+  // enter and we abort the penalty flow.
+  const before = state.match.onCourt.slice();
+  doSubstitution(slot, ctx.specialistId);
+  const afterOk = state.match.onCourt[slot] === ctx.specialistId;
+  if (afterOk) {
+    ctx.onDone();
+  } else {
+    // User cancelled the sub → also cancel the penalty flow silently.
+    // The wizard modal stays open on the current step so Toni can pick again.
   }
 }
 
@@ -6148,8 +6361,28 @@ function buildEventTableRow(evt) {
     marks.push(`<span class="event-videotime" title="🎥 tiempo vídeo">🎥 ${String(vm).padStart(2,'0')}:${String(vs).padStart(2,'0')}</span>`);
   }
 
-  // Player column: only shown for non-sub events (subs already name people in their label)
-  const playerCell = isSub ? '' : (player ? escapeHtml(displayName(player)) : '');
+  // Player column:
+  //  - Subs already name people in the label, so cell is empty
+  //  - Penalty needs to show BOTH roles (provoker + shooter, or fouler + GK)
+  //    because "who provokes / who takes" is what Toni wants to see at a glance
+  //  - Everything else shows the main actor
+  let playerCell = '';
+  if (isSub) {
+    playerCell = '';
+  } else if (evt.type === 'penalty') {
+    const pen = evt.doublePenalty ? 'doble penalti' : 'penalti';
+    const provTxt = (id, label) => {
+      const p = id ? getPlayer(id) : null;
+      return p ? `<div style="font-size:11px; color:#334155;">${label}: <b>${escapeHtml(displayName(p))}</b> (${p.number ?? '·'})</div>` : '';
+    };
+    if (evt.side === 'for') {
+      playerCell = provTxt(evt.provokerId, `Provoca ${pen}`) + provTxt(evt.shooterId, `Hace ${pen}`);
+    } else {
+      playerCell = provTxt(evt.fouledId, `Comete ${pen}`) + provTxt(evt.gkId, `Portero`);
+    }
+  } else {
+    playerCell = player ? escapeHtml(displayName(player)) : '';
+  }
 
   return `<tr class="${isSub ? 'sub-row' : ''}">
     <td class="col-time"><span data-evt-time="${evt.id}" style="cursor:pointer; text-decoration:underline dotted;" title="Tocar para corregir el tiempo">${periodLabel} ${formatCountdown(evt.time)}</span></td>
@@ -7800,7 +8033,7 @@ function renderBench() {
       <div class="bench-item-name">${escapeHtml(displayName(p))}</div>
       ${cardsHtml ? `<div class="bench-item-cards">${cardsHtml}</div>` : ''}
       <div class="bench-item-stats">
-        <span class="pill" title="Tiempo total jugado en el partido">${formatTime(mins)}</span>
+        <span class="pill time-pill" title="Tiempo total jugado en el partido">${formatTime(mins)}</span>
         <span class="pill rot-pill" title="Rotaciones (entradas a pista)">×${rots}</span>
       </div>
     `;
@@ -8499,6 +8732,12 @@ document.getElementById('closeChainConfirmModal').addEventListener('click', () =
 document.getElementById('chainConfirmModal').addEventListener('click', e => {
   if (e.target.id === 'chainConfirmModal') _closeChainConfirm(false);
 });
+
+// Specialist substitution modal (penalty shooter/GK coming from the bench)
+document.getElementById('closeSpecialistSwapModal').addEventListener('click', closeSpecialistSwapModal);
+document.getElementById('specialistSwapModal').addEventListener('click', e => {
+  if (e.target.id === 'specialistSwapModal') closeSpecialistSwapModal();
+});
 // Delegate clicks on person chips
 ['cardCourtList','cardBenchList','cardStaffList'].forEach(id => {
   document.getElementById(id).addEventListener('click', async (e) => {
@@ -9173,6 +9412,11 @@ setInterval(() => {
     renderClock();
     renderCourtSlots();  // update minutes display for on-court players
     renderSanctionsBanner();
+    // Update the pair timer(s) in the Atk/Def panel every second too, so the
+    // counter next to the ⇆ arrow moves live.
+    if (state.match.attackDefenseActive) {
+      renderAtkDefPairsPanel();
+    }
     const banner = document.getElementById('subTimeBanner');
     if (banner && banner.style.display !== 'none') {
       updateSubTimeBanner();
