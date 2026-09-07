@@ -429,17 +429,22 @@
 
   /* ===== MAIN MATCH LAYOUT ===== */
   /* 3 columns while there's room: [players] [actions] [event log].
-     Below 1200px we fall back to 2 (log stacks under actions). Below the
-     responsive breakpoint further down, everything stacks. */
+     Toni asked for a wider players column (so long names like Batllori fit in
+     the Atk/Def pair widget) and a slimmer log column — the log doesn't need
+     to fill an ultrawide monitor, and the players/bench area is the one that
+     was starving for space. Actions stay the same. */
   .main {
     display: grid;
-    grid-template-columns: 340px minmax(300px, 380px) 1fr;
+    grid-template-columns: 440px minmax(300px, 380px) minmax(360px, 720px);
     gap: 12px;
     padding: 12px;
+    justify-content: start;      /* if the screen is wider than needed, keep
+                                    everything packed on the left rather than
+                                    stretching the log to fill dead space */
     min-height: calc(100vh - 110px);
   }
-  @media (max-width: 1200px) {
-    .main { grid-template-columns: 320px 1fr; }
+  @media (max-width: 1300px) {
+    .main { grid-template-columns: 420px 1fr; }
     .match-log-col { grid-column: 1 / -1; }
   }
   .match-left { display: flex; flex-direction: column; }
@@ -1293,7 +1298,7 @@
   .atkdef-pair {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
-    gap: 10px;
+    gap: 8px;
     align-items: center;
     padding: 8px;
     background: #fff;
@@ -1311,7 +1316,7 @@
     background: #fffbeb;
     cursor: pointer;
     font-size: 14px;
-    min-width: 0;
+    min-width: 0;   /* let the grid track shrink cleanly when needed */
     transition: transform .05s ease, background .1s ease;
   }
   .atkdef-slot:active { transform: scale(0.97); }
@@ -1328,51 +1333,52 @@
     color: #1e40af;
   }
   .atkdef-slot.on-bench:hover { background: #bfdbfe; }
-  /* Right-side stack inside a slot: name on top, role below in small caps. */
+  /* Right-side stack inside a slot: name on top, role below in small caps.
+     With the wider players column we now have room for the full name — no
+     ellipsis clipping. If it ever needs to wrap it wraps naturally. */
   .atkdef-slot-body {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     min-width: 0;
-    line-height: 1.1;
+    line-height: 1.15;
     flex: 1;
   }
   .atkdef-slot .adname {
     font-weight: 700;
-    font-size: 14px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-size: 15px;
+    word-break: break-word;
     max-width: 100%;
   }
   .atkdef-slot .adnum {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 30px;
-    height: 30px;
+    min-width: 32px;
+    height: 32px;
     padding: 0 6px;
     background: rgba(0,0,0,0.08);
     border-radius: 6px;
     font-weight: 800;
-    font-size: 15px;
+    font-size: 16px;
     flex-shrink: 0;
   }
   .atkdef-slot .adrole {
     font-size: 10px;
-    opacity: 0.75;
+    opacity: 0.8;
     text-transform: uppercase;
     font-weight: 700;
     letter-spacing: 0.04em;
-    margin-top: 2px;
+    margin-top: 3px;
   }
-  /* Center column: swap arrow + running time of this pair. */
+  /* Center column: swap arrow + running time of this pair. Slightly wider so
+     the MM:SS counter never gets clipped. */
   .atkdef-center {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 0 4px;
-    min-width: 60px;
+    padding: 0 6px;
+    min-width: 64px;
   }
   .atkdef-swap-arrow {
     font-size: 22px;
