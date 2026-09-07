@@ -2470,6 +2470,24 @@
   </div>
 </div>
 
+<!-- ===== CHAIN CONFIRM MODAL (SI/NO generic) ===== -->
+<!-- Reusable Sí/No dialog styled like the rest of the app, replacing the -->
+<!-- browser's native confirm(). Used for chained-action prompts like -->
+<!-- "duel_def_won → ¿hubo recuperación?" and "duel_off_lost → ¿hubo pérdida?"-->
+<div class="modal-backdrop" id="chainConfirmModal" style="display:none;">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-title">
+      <span id="chainConfirmTitle">Confirmar</span>
+      <button class="btn btn-ghost" id="closeChainConfirmModal">✕</button>
+    </div>
+    <div id="chainConfirmQuestion" style="font-size:15px; color:#334155; margin-bottom:16px; line-height:1.4;"></div>
+    <div style="display:flex; gap:10px;">
+      <button class="btn btn-ghost" id="chainConfirmNoBtn" style="flex:1; padding:14px; font-weight:700;">NO</button>
+      <button class="btn btn-primary" id="chainConfirmYesBtn" style="flex:1; padding:14px; font-weight:700; background:#16a34a; border-color:#16a34a;">SÍ</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== PENALTY PICKER MODAL ===== -->
 <div class="modal-backdrop" id="penaltyModal" style="display:none;">
   <div class="modal" style="max-width:560px;">
@@ -2563,7 +2581,7 @@
 
 <!-- ===== DUEL PICKER MODAL ===== -->
 <div class="modal-backdrop" id="duelModal" style="display:none;">
-  <div class="modal" style="max-width:520px;">
+  <div class="modal" style="max-width:700px;">
     <div class="modal-title">
       <span>⚔️ Duelo</span>
       <button class="btn btn-ghost" id="closeDuelModal">✕</button>
@@ -4185,7 +4203,13 @@ async function logAction(type, playerId, extra = {}) {
       renderAll();
       // Deferred so the current render finishes before showing the dialog
       setTimeout(async () => {
-        if (confirm('¿Hubo recuperación tras ganar el duelo?')) {
+        const yes = await askChainConfirm({
+          title: '🛡️ Duelo defensivo ganado',
+          question: '¿Hubo recuperación tras ganar el duelo?',
+          yesLabel: 'SÍ, hubo recuperación',
+          noLabel: 'NO',
+        });
+        if (yes) {
           await logAction('recovery', playerId, {
             time: evt.time,
             period: evt.period,
@@ -4201,7 +4225,13 @@ async function logAction(type, playerId, extra = {}) {
       finishInsertMode();
       renderAll();
       setTimeout(async () => {
-        if (confirm('¿Hubo pérdida tras el duelo perdido?')) {
+        const yes = await askChainConfirm({
+          title: '💪 Duelo ofensivo perdido',
+          question: '¿Hubo pérdida tras el duelo perdido?',
+          yesLabel: 'SÍ, hubo pérdida',
+          noLabel: 'NO',
+        });
+        if (yes) {
           await logAction('loss', playerId, {
             time: evt.time,
             period: evt.period,
@@ -4880,6 +4910,35 @@ async function handleAssistGoalPick(scorerId) {
     autoFromAssist: true,
     assistedById: ctx.assisterId,
   });
+}
+
+// ============================================================
+// CHAIN CONFIRM (styled Sí/No dialog)
+// ============================================================
+// Replaces window.confirm() for the in-match chained-action prompts so the UI
+// stays consistent (centered modal, app styling, big touch targets). Returns
+// a Promise that resolves to true (SÍ) or false (NO / closed).
+let chainConfirmResolver = null;
+function askChainConfirm({title, question, yesLabel, noLabel}) {
+  return new Promise(resolve => {
+    // If a previous prompt was still open (shouldn't happen), close and
+    // resolve it as "no" before starting the new one.
+    if (chainConfirmResolver) { chainConfirmResolver(false); chainConfirmResolver = null; }
+    chainConfirmResolver = resolve;
+    document.getElementById('chainConfirmTitle').textContent = title || 'Confirmar';
+    document.getElementById('chainConfirmQuestion').textContent = question || '';
+    document.getElementById('chainConfirmYesBtn').textContent = yesLabel || 'SÍ';
+    document.getElementById('chainConfirmNoBtn').textContent = noLabel || 'NO';
+    document.getElementById('chainConfirmModal').style.display = 'flex';
+  });
+}
+function _closeChainConfirm(answer) {
+  document.getElementById('chainConfirmModal').style.display = 'none';
+  if (chainConfirmResolver) {
+    const r = chainConfirmResolver;
+    chainConfirmResolver = null;
+    r(answer);
+  }
 }
 
 // ============================================================
@@ -8431,6 +8490,14 @@ document.getElementById('assistGoalModal').addEventListener('click', e => {
 document.getElementById('assistGoalSkipBtn').addEventListener('click', () => {
   // The user says the goal was already recorded → don't chain, just close.
   closeAssistGoalModal();
+});
+
+// Chain confirm modal (styled Sí/No that replaces browser confirm)
+document.getElementById('chainConfirmYesBtn').addEventListener('click', () => _closeChainConfirm(true));
+document.getElementById('chainConfirmNoBtn').addEventListener('click', () => _closeChainConfirm(false));
+document.getElementById('closeChainConfirmModal').addEventListener('click', () => _closeChainConfirm(false));
+document.getElementById('chainConfirmModal').addEventListener('click', e => {
+  if (e.target.id === 'chainConfirmModal') _closeChainConfirm(false);
 });
 // Delegate clicks on person chips
 ['cardCourtList','cardBenchList','cardStaffList'].forEach(id => {
