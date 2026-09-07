@@ -5150,11 +5150,18 @@ function renderPenaltyPlayerGrid(listId, step) {
   // Only the "shooter" (favour) and "gk" (against) steps allow bench
   // specialists — those are the players who actually take/face the penalty.
   // For "provoker" / "fouled", it only makes sense to pick from the court.
+  // The bench list is restricted to CONVOCADOS of the current activity so we
+  // don't offer players who aren't even at the game today. If attendance data
+  // isn't loaded (no linked activity), we fall back to the full roster minus
+  // court/expelled, which was the old behaviour.
   const allowBench = (step === 'shooter' || step === 'gk');
   const expelled = new Set(state.match.expelledPlayers || []);
+  const convokedIds = getConvokedPlayerIds();  // Set or null
   const benchPlayers = allowBench
-    ? state.roster.filter(p => !onCourtIds.includes(p.id) && !expelled.has(p.id))
-      .sort((a, b) => (a.number || 99) - (b.number || 99))
+    ? state.roster
+        .filter(p => !onCourtIds.includes(p.id) && !expelled.has(p.id))
+        .filter(p => convokedIds ? convokedIds.has(p.id) : true)
+        .sort((a, b) => (a.number || 99) - (b.number || 99))
     : [];
 
   if (onCourtPlayers.length === 0 && benchPlayers.length === 0) {
