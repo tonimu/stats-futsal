@@ -4474,6 +4474,12 @@ async function breakAtkDefPair(pairIdx, reason, silent = false) {
     state.match.attackDefenseActive = false;
   }
   await saveCurrentMatch();
+  // Refresh the UI so the pair widget updates immediately. Without this the
+  // orange panel would still show the (now-deleted) last pair until the next
+  // clock tick or unrelated event forced a re-render. Callers that already
+  // renderAll() after us (doSubstitution, expelPlayer) get a harmless second
+  // render — cheap and safer than forgetting.
+  renderAll();
   if (!silent) {
     // Deferred alert so we don't block the UI in the middle of the sub/expulsion flow.
     const attTxt = att ? `${displayName(att)} (#${att.number ?? '·'})` : '?';
@@ -5141,12 +5147,32 @@ function closePenaltyPicker() {
 
 // Show a single step, hide the rest. Called every time we advance/rewind.
 function showPenaltyStep(step) {
-  const stepIds = ['penStepSide', 'penStepFoul', 'penStepProvoker', 'penStepShooter', 'penStepFouled', 'penStepGK', 'penStepResult'];
-  stepIds.forEach(id => {
+  // Explicit step → element-id maps. Doing it by hand avoids the case bug
+  // that was happening with 'gk' (built as 'penStepGk' but the HTML div is
+  // 'penStepGK'): when the id didn't match, the JS threw on .style.display
+  // and the whole step change aborted — that's why the GK picker never
+  // appeared for penaltis en contra.
+  const stepDivIds = {
+    side: 'penStepSide',
+    foul: 'penStepFoul',
+    provoker: 'penStepProvoker',
+    shooter: 'penStepShooter',
+    fouled: 'penStepFouled',
+    gk: 'penStepGK',
+    result: 'penStepResult',
+  };
+  const stepListIds = {
+    provoker: 'penProvokerList',
+    shooter: 'penShooterList',
+    fouled: 'penFouledList',
+    gk: 'penGKList',
+  };
+  Object.values(stepDivIds).forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  document.getElementById('penStep' + step[0].toUpperCase() + step.slice(1)).style.display = '';
+  const target = document.getElementById(stepDivIds[step]);
+  if (target) target.style.display = '';
 
   // Populate content per step
   if (step === 'foul') {
@@ -5158,8 +5184,7 @@ function showPenaltyStep(step) {
     }
   }
   if (step === 'provoker' || step === 'shooter' || step === 'fouled' || step === 'gk') {
-    const listId = 'pen' + step[0].toUpperCase() + step.slice(1) + 'List';
-    renderPenaltyPlayerGrid(listId, step);
+    renderPenaltyPlayerGrid(stepListIds[step], step);
   }
   if (step === 'result') {
     // Summary of everything picked so far
@@ -6948,10 +6973,16 @@ function convokedIdsForMatch(m) {
   recs.forEach(r => {
     if (r.personType !== 'player') return;
     if (hasExplicitFlag) {
-      // Use the new field; default true (called up) if a specific record has no value
-      if (r.convocado !== false) ids.add(r.personId);
+      // New schema: needs BOTH convocado (default true if unset) AND actually
+      // attending. A convoked player who didn't show up (asistencia false or
+      // null/pending) is NOT included — Toni's ask: "solo convocado y asiste
+      // o tarde" (asistencia=true covers both, since "Tarde" is asistencia=true
+      // plus puntualidad=false).
+      const convoked = r.convocado !== false;
+      const attended = r.asistencia === true;
+      if (convoked && attended) ids.add(r.personId);
     } else {
-      // Legacy fallback
+      // Legacy fallback: only asistencia flag exists
       if (r.asistencia === true) ids.add(r.personId);
     }
   });
@@ -6996,6 +7027,17 @@ async function computeAggregatedStats(selectedMatches) {
       duelDefWon: 0, duelDefLost: 0,   // defensive duels won / lost
       matchesPlayed: 0,     // convoked count
       rotations: 0,         // total times entered the pitch across matches
+      // Penalty ranking counters (populated below when e.type === 'penalty'):
+      //  - Provoked = we won a penalty because of this player (side='for')
+      //  - Committed = this player conceded a penalty against us (side='against')
+      //  - Shot / ShotGoal = penalties this player took (a favor) and how many scored
+      //  - Faced / Saved = penalties this player faced as GK (en contra) and saves
+      penaltiesProvoked: 0,
+      penaltiesCommitted: 0,
+      penaltiesShot: 0,
+      penaltiesShotGoal: 0,
+      penaltiesFaced: 0,
+      penaltiesSaved: 0,
     };
   });
 
@@ -7082,7 +7124,8 @@ async function computeAggregatedStats(selectedMatches) {
         }
       }
       else if (e.type === 'penalty') {
-        // Penalty in favour: counts as a chance for the shooter.
+        // Penalty in favour: counts as a chance for the shooter (already handled
+        // by s.chances/goals/etc). Also tracks the per-role penalty rankings.
         // Penalty against us: counts as an opponent chance faced by the GK.
         // e.playerId was set to the shooter (for) or GK (against) at logPenalty time.
         if (e.side === 'for') {
@@ -7090,11 +7133,25 @@ async function computeAggregatedStats(selectedMatches) {
           if (e.result === 'gol') s.goals++;
           else if (e.result === 'parada') s.chancesSaved++;
           else s.chancesOff++;
+          // Shooter counters (s is already byPlayer[e.playerId] = shooter)
+          s.penaltiesShot++;
+          if (e.result === 'gol') s.penaltiesShotGoal++;
+          // Provoker counter (different player, look up separately)
+          if (e.provokerId && byPlayer[e.provokerId]) {
+            byPlayer[e.provokerId].penaltiesProvoked++;
+          }
         } else if (e.side === 'against') {
           s.oppChances++;
           if (e.result === 'parada') s.saves++;
           else if (e.result === 'gol') s.oppGoals++;
           else s.oppOff++;
+          // GK counters (s is already byPlayer[e.playerId] = GK)
+          s.penaltiesFaced++;
+          if (e.result === 'parada') s.penaltiesSaved++;
+          // Committer counter (the one who conceded the foul)
+          if (e.fouledId && byPlayer[e.fouledId]) {
+            byPlayer[e.fouledId].penaltiesCommitted++;
+          }
         }
       }
     }
@@ -7643,31 +7700,108 @@ async function renderTopPlayers(selected, content) {
       ${rankBlock('Más tarjetas', s => s.yellows + s.reds, '#dc2626', '🟨')}
       ${rankBlock('Más goles encajados (culpa)', s => s.gaBlame, '#dc2626', '🥅')}
     </div>
+    <div class="top-block-label" style="background:#fef3c7; color:#78350f;">Penaltis</div>
+    <div class="top-grid">
+      ${rankBlock('Provoca penaltis', s => s.penaltiesProvoked, '#0891b2', '⚡')}
+      ${rankBlock('Chuta penaltis (goles)', s => s.penaltiesShotGoal, '#16a34a', '🥅')}
+      ${rankBlock('Para penaltis', s => s.penaltiesSaved, '#16a34a', '🧤')}
+      ${rankBlock('Comete penaltis', s => s.penaltiesCommitted, '#dc2626', '🛑')}
+    </div>
   `;
 }
 
 // ---- TOP QUINTETS (which 5-on-court combos produced most) ----
 async function renderTopQuintets(selected, content) {
-  // Aggregate events by the exact quintet on court (5 players, sorted ids).
+  const calc = statsFilters.calc; // 'total' | 'perMatch' | 'perTime'
+
+  // Aggregate raw stats + how many matches each quintet appeared in + how
+  // many seconds they were on the court together. That way we can offer the
+  // same "total / by match / by minute" modes as the players view.
   const quintetStats = {};
   for (const m of selected) {
     const data = await loadMatchData(m.id, m.isActive);
+
+    // 1) Event-based counters (goals, chances, etc.) — same as before.
     for (const e of data.events) {
       if (!eventMatchesJ5(e)) continue;
       const ids = [...(e.onCourt || [])].filter(Boolean).sort();
       if (ids.length !== 5) continue;
       const key = ids.join('|');
-      if (!quintetStats[key]) quintetStats[key] = {goals:0, chances:0, recoveries:0, losses:0, oppGoals:0, oppChances:0, events:0};
+      if (!quintetStats[key]) {
+        quintetStats[key] = {
+          goals:0, chances:0, recoveries:0, losses:0,
+          oppGoals:0, oppChances:0, events:0,
+          matchIds: new Set(), seconds: 0,
+        };
+      }
       const q = quintetStats[key];
       q.events++;
+      q.matchIds.add(m.id);
       if (e.type === 'chance') { q.chances++; if (e.result === 'gol') q.goals++; }
       else if (e.type === 'recovery') q.recoveries++;
       else if (e.type === 'loss') q.losses++;
       else if (e.type === 'opp_chance') { q.oppChances++; if (e.result === 'gol') q.oppGoals++; }
     }
+
+    // 2) Time-on-court per quintet. We walk the events of this match in
+    // chronological order and, every time onCourt changes, close the "window"
+    // for the previous quintet with the delta since the last change.
+    // Approximation: the first event of a period covers the time from 0 to
+    // its own timestamp, attributed to the quintet on court at that event
+    // (i.e. we assume no sub happened before it). This is off only in the
+    // rare case of a sub before the first tracked action of a period.
+    const PL = m.periodLength || (m.match && m.match.periodLength) || 20*60;
+    const evsByPeriod = { 1: [], 2: [] };
+    for (const e of data.events) {
+      if (!eventMatchesJ5(e)) continue;
+      if (!Array.isArray(e.onCourt)) continue;
+      if (e.period !== 1 && e.period !== 2) continue;
+      evsByPeriod[e.period].push(e);
+    }
+    for (const per of [1, 2]) {
+      const evs = evsByPeriod[per].sort((a, b) => (a.time || 0) - (b.time || 0));
+      if (evs.length === 0) continue;
+      // Establish the first "active quintet" from the first event; the window
+      // starts at t=0 conceptually.
+      let activeKey = [...evs[0].onCourt].filter(Boolean).sort().join('|');
+      let activeSince = 0;
+      const addTime = (key, from, to) => {
+        if (key.split('|').filter(Boolean).length !== 5) return;
+        const dt = Math.max(0, to - from);
+        if (dt <= 0) return;
+        if (!quintetStats[key]) {
+          quintetStats[key] = {
+            goals:0, chances:0, recoveries:0, losses:0,
+            oppGoals:0, oppChances:0, events:0,
+            matchIds: new Set(), seconds: 0,
+          };
+        }
+        quintetStats[key].seconds += dt;
+        quintetStats[key].matchIds.add(m.id);
+      };
+      for (const e of evs) {
+        const key = [...e.onCourt].filter(Boolean).sort().join('|');
+        if (key !== activeKey) {
+          addTime(activeKey, activeSince, e.time || 0);
+          activeKey = key;
+          activeSince = e.time || 0;
+        }
+      }
+      // Close the tail: from the last change until the end of the period.
+      // For the active period of the running match, use the current clock so
+      // times don't jump to 20:00 while the game is still going.
+      let periodEnd = PL;
+      if (m.isActive && state.match && state.match.timer && state.match.timer.period === per) {
+        periodEnd = Math.min(PL, currentMatchSeconds());
+      }
+      addTime(activeKey, activeSince, periodEnd);
+    }
   }
-  const quintets = Object.entries(quintetStats).map(([k,v]) => ({
-    players: k.split('|').map(getPlayer).filter(Boolean), ...v
+
+  const quintets = Object.entries(quintetStats).map(([k, v]) => ({
+    players: k.split('|').map(getPlayer).filter(Boolean),
+    matchesPlayed: v.matchIds.size,
+    ...v,
   }));
 
   if (quintets.length === 0) {
@@ -7676,15 +7810,32 @@ async function renderTopQuintets(selected, content) {
     return;
   }
 
+  // Value transform per calc mode. matchesPlayed / seconds decide the divisor.
+  const val = (q, raw) => {
+    if (calc === 'perMatch') return q.matchesPlayed ? raw / q.matchesPlayed : 0;
+    if (calc === 'perTime')  { const mins = q.seconds/60; return mins > 0 ? raw / mins : 0; }
+    return raw;
+  };
+  const calcSuffix = calc === 'perMatch' ? ' / partido' : calc === 'perTime' ? ' / min' : '';
+
   function quintetCard(title, statKey, color, emoji, isNeg) {
-    const ranked = [...quintets].filter(q => q[statKey] > 0).sort((a,b) => b[statKey] - a[statKey]);
+    const ranked = [...quintets]
+      .filter(q => q[statKey] > 0)
+      .map(q => ({ q, v: val(q, q[statKey]) }))
+      .sort((a, b) => b.v - a.v);
     const rows = ranked.length
-      ? ranked.map((q,i) => `
-          <div class="top-row quintet">
+      ? ranked.map(({q, v}, i) => {
+          const denomTxt = calc === 'perMatch'
+            ? `<span style="color:#94a3b8; font-weight:500; font-size:10px;"> (${q[statKey]} en ${q.matchesPlayed}p)</span>`
+            : calc === 'perTime'
+              ? `<span style="color:#94a3b8; font-weight:500; font-size:10px;"> (${q[statKey]} en ${formatTime(q.seconds)})</span>`
+              : '';
+          return `<div class="top-row quintet">
             <span class="top-rank">${i+1}</span>
             <span class="quintet-players">${q.players.map(p => escapeHtml(p.alias || p.name)).join(' · ')}</span>
-            <span class="top-val" style="color:${color};">${q[statKey]}</span>
-          </div>`).join('')
+            <span class="top-val" style="color:${color};">${fmtNum(v)}${calcSuffix}${denomTxt}</span>
+          </div>`;
+        }).join('')
       : '<div style="color:#94a3b8; font-size:13px; padding:8px;">Sin datos.</div>';
     return `<div class="top-card"><h4>${emoji} ${title}</h4>${rows}</div>`;
   }
@@ -8098,21 +8249,29 @@ function getMostRecentMatchActivity() {
   return past[0] || null;
 }
 
-// Returns the set of player IDs convoked (= "Asiste Sí" or "Tarde") for that activity.
-// If no activity exists, returns null → fall back to "all roster".
-// Returns the set of player IDs who ATTENDED the current match's linked activity.
-// "Attended" = attendance record with asistencia === true (includes "tarde",
-// which is asistencia=true + puntualidad=false — they still showed up).
-// Note: the name is legacy — despite "Convoked", this actually returns attendees,
-// which is what "who can play" means during a live match.
+// Returns the set of player IDs who are convoked AND actually attending the
+// current match's linked activity. "Attending" = asistencia === true (which
+// includes "Tarde", stored as asistencia=true + puntualidad=false).
+// Toni's rule: only players who are convoked AND showed up should appear in
+// live match tools (stats, penalty specialists, etc.). A convoked player who
+// didn't come, or an attending person who wasn't convoked, is excluded.
 function getConvokedPlayerIds() {
   const act = getMostRecentMatchActivity();
   if (!act) return null;
   const recs = state.attendanceByActivity[act.id];
   if (!recs) return null; // not loaded yet
+  const hasExplicitFlag = recs.some(r => r.personType === 'player' && typeof r.convocado === 'boolean');
   const ids = new Set();
   recs.forEach(r => {
-    if (r.personType === 'player' && r.asistencia === true) ids.add(r.personId);
+    if (r.personType !== 'player') return;
+    const attended = r.asistencia === true;
+    if (!attended) return;
+    if (hasExplicitFlag) {
+      // New schema: also require convocado !== false
+      if (r.convocado !== false) ids.add(r.personId);
+    } else {
+      ids.add(r.personId);
+    }
   });
   return ids;
 }
