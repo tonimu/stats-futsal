@@ -5492,6 +5492,12 @@ async function buildLivePlayerHtml(activeMatchObj) {
   const data = await loadMatchData(activeMatchObj.id, true);
   const period = liveStatsState.period; // null | 1 | 2
 
+  // Convocados to this match: even if they never entered the pitch we want to
+  // see them in the table so Toni can spot who spent the game on the bench.
+  // If attendance data is missing we fall back to showing everyone who did
+  // something in the match (legacy behaviour).
+  const convokedSet = getConvokedPlayerIds(); // Set or null
+
   // Aggregate per player, mirroring the fields shown in the main Stats table
   // but scoped to the live match and to the selected period.
   const byPlayer = {};
@@ -5500,6 +5506,7 @@ async function buildLivePlayerHtml(activeMatchObj) {
     byPlayer[p.id] = {
       id: p.id, name: p.name, alias: p.alias, number: p.number,
       isGK: p.isGK,
+      convoked: convokedSet ? convokedSet.has(p.id) : true,
       minutes: 0, rotations: 0,
       goals: 0, chances: 0, chancesOff: 0, chancesSaved: 0,
       assistsGoal: 0, assistsNoGoal: 0,
@@ -5581,13 +5588,22 @@ async function buildLivePlayerHtml(activeMatchObj) {
     if (byPlayer[pid]) byPlayer[pid].reds += Math.floor(count / 2);
   }
 
-  // Only show players who did something in this scope
-  let rows = Object.values(byPlayer).filter(s =>
-    s.minutes > 0 || s.rotations || s.goals || s.chances ||
-    s.assistsGoal || s.assistsNoGoal || s.recoveries || s.losses ||
-    s.fouls || s.yellows || s.reds || s.oppChances || s.gaBlame ||
-    s.duelOffWon || s.duelOffLost || s.duelDefWon || s.duelDefLost);
-  rows.sort((a, b) => (b.minutes - a.minutes) || (a.number - b.number));
+  // Show every convoked player, whether they played or not. If we don't have
+  // attendance data (convokedSet is null) fall back to the old behaviour:
+  // show players who actually did something.
+  let rows;
+  if (convokedSet) {
+    rows = Object.values(byPlayer).filter(s => s.convoked);
+  } else {
+    rows = Object.values(byPlayer).filter(s =>
+      s.minutes > 0 || s.rotations || s.goals || s.chances ||
+      s.assistsGoal || s.assistsNoGoal || s.recoveries || s.losses ||
+      s.fouls || s.yellows || s.reds || s.oppChances || s.gaBlame ||
+      s.duelOffWon || s.duelOffLost || s.duelDefWon || s.duelDefLost);
+  }
+  // Sort: players who played first (by minutes desc), then bench sitters (by
+  // shirt number) so it's easy to see who was on the pitch vs who never got in.
+  rows.sort((a, b) => (b.minutes - a.minutes) || ((a.number || 99) - (b.number || 99)));
 
   const periodTxt = period == null ? 'Total del partido' : (period === 1 ? '1ª parte' : '2ª parte');
   if (rows.length === 0) {
@@ -6942,6 +6958,22 @@ function convokedIdsForMatch(m) {
   return ids;
 }
 
+// Union of the convoked players across all selected matches. Returns null if
+// no selected match has attendance data (so callers can fall back to the old
+// "everyone who did something" filter).
+function convokedIdsForMatches(matches) {
+  const union = new Set();
+  let anyData = false;
+  for (const m of matches) {
+    const s = convokedIdsForMatch(m);
+    if (s) {
+      anyData = true;
+      s.forEach(id => union.add(id));
+    }
+  }
+  return anyData ? union : null;
+}
+
 // Compute aggregated stats across multiple matches.
 async function computeAggregatedStats(selectedMatches) {
   const byPlayer = {};
@@ -7264,11 +7296,22 @@ async function renderPlayerStats(selected) {
                       : 'Por jugador · totales';
 
   const {byPlayer} = await computeAggregatedStats(selected);
-  let rows = Object.values(byPlayer).filter(s =>
-    s.minutes>0 || s.goals || s.chances || s.assistsGoal || s.assistsNoGoal ||
-    s.recoveries || s.losses || s.fouls || s.yellows || s.reds || s.saves ||
-    s.gaBlame || s.oppChances || s.matchesPlayed || s.rotations ||
-    s.duelOffWon || s.duelOffLost || s.duelDefWon || s.duelDefLost);
+
+  // Which players are we willing to display? If ANY selected match has
+  // attendance data, we restrict to convokados across those matches (Toni's
+  // ask: "only players active in this game"). Otherwise we fall back to the
+  // "did something" filter for old matches without attendance records.
+  const convokedUnion = convokedIdsForMatches(selected);
+  let rows;
+  if (convokedUnion) {
+    rows = Object.values(byPlayer).filter(s => convokedUnion.has(s.id));
+  } else {
+    rows = Object.values(byPlayer).filter(s =>
+      s.minutes>0 || s.goals || s.chances || s.assistsGoal || s.assistsNoGoal ||
+      s.recoveries || s.losses || s.fouls || s.yellows || s.reds || s.saves ||
+      s.gaBlame || s.oppChances || s.matchesPlayed || s.rotations ||
+      s.duelOffWon || s.duelOffLost || s.duelDefWon || s.duelDefLost);
+  }
 
   // Sorting: default by chances desc. statsFilters.sortKey/sortDir control it.
   const sortKey = statsFilters.sortKey || 'chances';
