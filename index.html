@@ -7032,12 +7032,23 @@ async function computeAggregatedStats(selectedMatches) {
       //  - Committed = this player conceded a penalty against us (side='against')
       //  - Shot / ShotGoal = penalties this player took (a favor) and how many scored
       //  - Faced / Saved = penalties this player faced as GK (en contra) and saves
+      // Double penalties (10m, e.doublePenalty === true) are tracked in a
+      // SEPARATE set of counters below so each ranking (Penaltis vs Doble
+      // penaltis) shows disjoint numbers — a doble does NOT also count as a
+      // penalti simple. That way Toni sees exactly how many of each kind each
+      // player has been involved in.
       penaltiesProvoked: 0,
       penaltiesCommitted: 0,
       penaltiesShot: 0,
       penaltiesShotGoal: 0,
       penaltiesFaced: 0,
       penaltiesSaved: 0,
+      doublePenaltiesProvoked: 0,
+      doublePenaltiesCommitted: 0,
+      doublePenaltiesShot: 0,
+      doublePenaltiesShotGoal: 0,
+      doublePenaltiesFaced: 0,
+      doublePenaltiesSaved: 0,
     };
   });
 
@@ -7128,17 +7139,27 @@ async function computeAggregatedStats(selectedMatches) {
         // by s.chances/goals/etc). Also tracks the per-role penalty rankings.
         // Penalty against us: counts as an opponent chance faced by the GK.
         // e.playerId was set to the shooter (for) or GK (against) at logPenalty time.
+        //
+        // Double penalties (10m) go to a separate set of counters so each
+        // ranking is disjoint (a doble is NOT also a penalti simple).
+        const isDouble = !!e.doublePenalty;
         if (e.side === 'for') {
           s.chances++;
           if (e.result === 'gol') s.goals++;
           else if (e.result === 'parada') s.chancesSaved++;
           else s.chancesOff++;
           // Shooter counters (s is already byPlayer[e.playerId] = shooter)
-          s.penaltiesShot++;
-          if (e.result === 'gol') s.penaltiesShotGoal++;
+          if (isDouble) {
+            s.doublePenaltiesShot++;
+            if (e.result === 'gol') s.doublePenaltiesShotGoal++;
+          } else {
+            s.penaltiesShot++;
+            if (e.result === 'gol') s.penaltiesShotGoal++;
+          }
           // Provoker counter (different player, look up separately)
           if (e.provokerId && byPlayer[e.provokerId]) {
-            byPlayer[e.provokerId].penaltiesProvoked++;
+            if (isDouble) byPlayer[e.provokerId].doublePenaltiesProvoked++;
+            else          byPlayer[e.provokerId].penaltiesProvoked++;
           }
         } else if (e.side === 'against') {
           s.oppChances++;
@@ -7146,11 +7167,17 @@ async function computeAggregatedStats(selectedMatches) {
           else if (e.result === 'gol') s.oppGoals++;
           else s.oppOff++;
           // GK counters (s is already byPlayer[e.playerId] = GK)
-          s.penaltiesFaced++;
-          if (e.result === 'parada') s.penaltiesSaved++;
+          if (isDouble) {
+            s.doublePenaltiesFaced++;
+            if (e.result === 'parada') s.doublePenaltiesSaved++;
+          } else {
+            s.penaltiesFaced++;
+            if (e.result === 'parada') s.penaltiesSaved++;
+          }
           // Committer counter (the one who conceded the foul)
           if (e.fouledId && byPlayer[e.fouledId]) {
-            byPlayer[e.fouledId].penaltiesCommitted++;
+            if (isDouble) byPlayer[e.fouledId].doublePenaltiesCommitted++;
+            else          byPlayer[e.fouledId].penaltiesCommitted++;
           }
         }
       }
@@ -7706,6 +7733,13 @@ async function renderTopPlayers(selected, content) {
       ${rankBlock('Chuta penaltis (goles)', s => s.penaltiesShotGoal, '#16a34a', '🥅')}
       ${rankBlock('Para penaltis', s => s.penaltiesSaved, '#16a34a', '🧤')}
       ${rankBlock('Comete penaltis', s => s.penaltiesCommitted, '#dc2626', '🛑')}
+    </div>
+    <div class="top-block-label" style="background:#fee2e2; color:#991b1b;">Doble penaltis (10m)</div>
+    <div class="top-grid">
+      ${rankBlock('Provoca doble penaltis', s => s.doublePenaltiesProvoked, '#0891b2', '⚡')}
+      ${rankBlock('Chuta doble penaltis (goles)', s => s.doublePenaltiesShotGoal, '#16a34a', '🥅')}
+      ${rankBlock('Para doble penaltis', s => s.doublePenaltiesSaved, '#16a34a', '🧤')}
+      ${rankBlock('Comete doble penaltis', s => s.doublePenaltiesCommitted, '#dc2626', '🛑')}
     </div>
   `;
 }
