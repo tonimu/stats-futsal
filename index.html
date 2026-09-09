@@ -1392,6 +1392,29 @@
     font-variant-numeric: tabular-nums;
     margin-top: 2px;
   }
+  /* Per-pair close button (top-right corner of each pair row). Small and
+     subtle so it doesn't compete with the swap targets. */
+  .atkdef-pair-close {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #9a3412;
+    font-weight: 800;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 4px;
+    line-height: 1;
+    z-index: 1;
+  }
+  .atkdef-pair-close:hover {
+    background: #fee2e2;
+    color: #b91c1c;
+  }
   /* Mark events in the log that happened during AtqDef mode */
   .atkdef-mark {
     display: inline-block;
@@ -4566,7 +4589,8 @@ function renderAtkDefPairsPanel() {
     // subtract from the period length and show 17:00 instead of 03:00.
     const activeSec = (typeof p.activatedAt === 'number') ? Math.max(0, now - p.activatedAt) : null;
     const timeTxt = activeSec != null ? formatTime(activeSec) : '—';
-    return `<div class="atkdef-pair">
+    return `<div class="atkdef-pair" style="position:relative;">
+      <button class="atkdef-pair-close" data-breakpair="${idx}" title="Deshacer solo esta pareja">✕</button>
       ${slotHtml(att, 'attacker', attOnCourt)}
       <div class="atkdef-center">
         <span class="atkdef-swap-arrow">⇆</span>
@@ -4582,23 +4606,41 @@ function renderAtkDefPairsPanel() {
         <span>⚔️ ATAQUE / DEFENSA · ${pairs.length}/2 parejas</span>
         <div style="display:flex; gap:6px;">
           ${pairs.length < 2 ? '<button class="btn btn-ghost btn-tiny" id="atkDefAddPairInlineBtn" title="Añadir otra pareja">+ Añadir pareja</button>' : ''}
-          <button class="btn btn-ghost btn-tiny" id="atkDefDeactivateBtn" title="Desactivar el modo">✕ Desactivar</button>
+          <button class="btn btn-ghost btn-tiny" id="atkDefDeactivateBtn" title="Desactivar el modo (deshace todas las parejas)">✕ Desactivar todo</button>
         </div>
       </div>
       ${rows}
     </div>
   `;
-  // Wire click on bench slots (fast swap) + deactivate button + add-pair button
+  // Wire click on bench slots (fast swap) + per-pair close + deactivate + add
   container.querySelectorAll('[data-swappair]').forEach(el => {
     el.addEventListener('click', async () => {
       const idx = parseInt(el.dataset.swappair, 10);
       await fastSwapAtkDefPair(idx);
     });
   });
+  container.querySelectorAll('[data-breakpair]').forEach(el => {
+    el.addEventListener('click', async (e) => {
+      // Stop propagation so we don't accidentally trigger a swap on the slot
+      // this button lives on top of.
+      e.stopPropagation();
+      const idx = parseInt(el.dataset.breakpair, 10);
+      const p = state.match.attackDefensePairs[idx];
+      if (!p) return;
+      const att = getPlayer(p.attackerId);
+      const def = getPlayer(p.defenderId);
+      const attTxt = att ? `${displayName(att)} (#${att.number ?? '·'})` : '?';
+      const defTxt = def ? `${displayName(def)} (#${def.number ?? '·'})` : '?';
+      if (confirm(`¿Deshacer solo esta pareja?\n\n${attTxt} ⇆ ${defTxt}`)) {
+        // silent=true because the user just confirmed
+        await breakAtkDefPair(idx, 'usuario', true);
+      }
+    });
+  });
   const deactBtn = document.getElementById('atkDefDeactivateBtn');
   if (deactBtn) {
     deactBtn.addEventListener('click', async () => {
-      if (confirm('¿Desactivar el modo Ataque/Defensa? Las parejas se descartarán.')) {
+      if (confirm('¿Desactivar el modo Ataque/Defensa? Todas las parejas se descartarán.')) {
         await deactivateAtkDef();
       }
     });
@@ -5212,11 +5254,22 @@ function handlePenaltyPick(step, playerId, fromBench = false) {
     const roleLabel = step === 'shooter' ? 'chutador'
                     : step === 'gk' ? 'portero'
                     : 'jugador';
-    openSpecialistSwapModal(playerId, roleLabel, () => {
-      // After the swap completes, proceed with the wizard as if the specialist
-      // had been on-court all along.
-      _finishPenaltyPick(step, playerId);
-    });
+    // Hide the penalty modal so the swap modal is the only thing on screen —
+    // otherwise the two backdrops stack and click targets get confusing.
+    const penModal = document.getElementById('penaltyModal');
+    penModal.style.display = 'none';
+    openSpecialistSwapModal(playerId, roleLabel,
+      // onDone (swap succeeded): restore the penalty modal and advance
+      () => {
+        penModal.style.display = 'flex';
+        _finishPenaltyPick(step, playerId);
+      },
+      // onCancel (swap cancelled or dismissed): restore the penalty modal
+      // on the SAME step so Toni can pick again.
+      () => {
+        penModal.style.display = 'flex';
+      }
+    );
     return;
   }
   _finishPenaltyPick(step, playerId);
@@ -5238,11 +5291,11 @@ function _finishPenaltyPick(step, playerId) {
 }
 
 // ---- Specialist substitution modal (bench → court for a penalty taker) ----
-let specialistSwapContext = null; // { specialistId, onDone }
-function openSpecialistSwapModal(specialistId, roleLabel, onDone) {
+let specialistSwapContext = null; // { specialistId, onDone, onCancel }
+function openSpecialistSwapModal(specialistId, roleLabel, onDone, onCancel) {
   const p = getPlayer(specialistId);
   if (!p) { onDone(); return; }
-  specialistSwapContext = { specialistId, onDone };
+  specialistSwapContext = { specialistId, onDone, onCancel: onCancel || (() => {}) };
   document.getElementById('specialistSwapTitle').textContent =
     `⇄ ${displayName(p)} (#${p.number ?? '·'}) entra como ${roleLabel}`;
   document.getElementById('specialistSwapHint').innerHTML =
@@ -5267,25 +5320,31 @@ function openSpecialistSwapModal(specialistId, roleLabel, onDone) {
   });
   document.getElementById('specialistSwapModal').style.display = 'flex';
 }
+// Two ways to close: dismissed (✕ / click outside) → onCancel; picking a
+// slot → the pick handler manages closing + onDone.
 function closeSpecialistSwapModal() {
+  const ctx = specialistSwapContext;
   specialistSwapContext = null;
   document.getElementById('specialistSwapModal').style.display = 'none';
+  if (ctx && ctx.onCancel) ctx.onCancel();
 }
 function handleSpecialistSwapPick(slot) {
   if (!specialistSwapContext) return;
   const ctx = specialistSwapContext;
-  closeSpecialistSwapModal();
+  // Clear before we do the sub, so the "dismiss" onCancel doesn't fire.
+  specialistSwapContext = null;
+  document.getElementById('specialistSwapModal').style.display = 'none';
   // Execute the sub. This may trigger the Atk/Def "¿romper pareja?" prompt
   // via doSubstitution's guard — if the user cancels, the specialist doesn't
-  // enter and we abort the penalty flow.
-  const before = state.match.onCourt.slice();
+  // enter and we abort the penalty flow (but keep the wizard open).
   doSubstitution(slot, ctx.specialistId);
   const afterOk = state.match.onCourt[slot] === ctx.specialistId;
   if (afterOk) {
     ctx.onDone();
   } else {
-    // User cancelled the sub → also cancel the penalty flow silently.
-    // The wizard modal stays open on the current step so Toni can pick again.
+    // Sub was cancelled by user (e.g. said "no" to break-pair). Bring the
+    // penalty modal back so Toni can pick another player.
+    ctx.onCancel();
   }
 }
 
