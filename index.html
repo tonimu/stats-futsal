@@ -1392,12 +1392,14 @@
     font-variant-numeric: tabular-nums;
     margin-top: 2px;
   }
-  /* Per-pair close button (top-right corner of each pair row). Small and
-     subtle so it doesn't compete with the swap targets. */
+  /* Per-pair close button: positioned OUTSIDE the white pair card, to the
+     right, so it doesn't sit on top of the defender slot. Height-wise it
+     stays at the top of the card. The panel around has enough padding to
+     accommodate the overflow. */
   .atkdef-pair-close {
     position: absolute;
     top: 2px;
-    right: 4px;
+    right: -10px;
     width: 22px;
     height: 22px;
     padding: 0;
