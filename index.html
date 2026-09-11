@@ -1948,6 +1948,76 @@
   .pill-no      { background: #fee2e2; color: #991b1b; }
   .pill-late    { background: #fef3c7; color: #78350f; }
   .pill-pending { background: #f1f5f9; color: #64748b; }
+
+  /* ===== INFORME ASISTENCIA — compact per-player month summary ===== */
+  .asistencia-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .asistencia-table th,
+  .asistencia-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: center;
+    vertical-align: middle;
+    font-variant-numeric: tabular-nums;
+  }
+  .asistencia-table th {
+    background: #f8fafc;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    font-weight: 700;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    white-space: nowrap;
+  }
+  .asistencia-table th.col-name,
+  .asistencia-table td.col-name {
+    text-align: left;
+    min-width: 180px;
+  }
+  .asistencia-table td.col-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .asistencia-table td.col-name .dorsal {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    background: #f1f5f9;
+    border-radius: 6px;
+    font-weight: 800;
+    font-size: 13px;
+    color: #334155;
+  }
+  .asistencia-table td.col-name .name {
+    font-weight: 600;
+    color: #0f172a;
+  }
+  .asistencia-table td.cell-count {
+    font-weight: 700;
+    color: #334155;
+  }
+  .asistencia-table td.has-count { font-weight: 800; color: #0f172a; }
+  .asistencia-table td.zero { color: #cbd5e1; }
+  .asistencia-table td.cell-late { color: #92400e; }
+  /* Total ausencias column: highlight background so it separates visually
+     the summary "Tarde | Total" block from the per-motive breakdown. */
+  .asistencia-table td.cell-total-ausencias {
+    background: #fef2f2;
+    color: #991b1b;
+    border-left: 2px solid #fecaca;
+    border-right: 2px solid #fecaca;
+  }
+  .asistencia-table tbody tr:hover { background: #f8fafc; }
 </style>
 </head>
 <body>
@@ -2428,6 +2498,7 @@
       <button class="subtab active" data-subview="activities">Actividades</button>
       <button class="subtab" data-subview="report">Informe mensual</button>
       <button class="subtab" data-subview="detail">Informe detallado</button>
+      <button class="subtab" data-subview="asistencia">Informe Asistencia</button>
     </div>
 
     <!-- Subview: Activities list -->
@@ -2505,6 +2576,24 @@
           <div id="detailPickPlayersList" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:4px;"></div>
         </div>
         <div id="detailContainer" style="overflow-x:auto;"></div>
+      </div>
+    </div>
+
+    <!-- Subview: "Informe Asistencia" — one-row-per-player summary table -->
+    <div class="subview" id="subview-asistencia" style="display:none;">
+      <div class="panel">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
+          <div class="panel-title" style="margin:0;">Informe Asistencia</div>
+          <input type="month" id="asistenciaMonth" class="form-input" title="Mes del informe">
+          <select id="asistenciaTeamFilter" class="form-input" title="Filtrar por equipo">
+            <option value="Senior A" selected>Solo Senior A</option>
+            <option value="Senior B">Solo Senior B</option>
+            <option value="Juvenil Nacional">Solo Juvenil Nacional</option>
+            <option value="__all__">Todos los equipos</option>
+          </select>
+          <button class="btn btn-primary" id="asistenciaExportCsvBtn" style="margin-left:auto;" title="Descargar CSV">📥 Exportar CSV</button>
+        </div>
+        <div id="asistenciaContainer" style="overflow-x:auto;"></div>
       </div>
     </div>
   </div>
@@ -9363,6 +9452,203 @@ function exportDetailedReportCsv() {
 }
 
 // ============================================================
+// INFORME ASISTENCIA (compact monthly summary — one row per player)
+// ============================================================
+// Fixed columns: Nombre · Entrenos (X/Y) · Partidos (X/Y) · Tarde
+// Dynamic columns: one per absence motive (Enfermedad, Vacaciones, Trabajo,
+// Lesión, Motivos Personales, Acuerdo con Staff) — full name of the motive.
+// Each cell is the count of times that motive was recorded for the player
+// in the selected month. Team filter matches the other reports.
+
+async function renderAsistenciaReport() {
+  const monthInput = document.getElementById('asistenciaMonth');
+  if (!monthInput.value) {
+    const now = new Date();
+    monthInput.value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  }
+  const month = monthInput.value;
+  const container = document.getElementById('asistenciaContainer');
+
+  // 1) Activities of the selected month, split by type
+  const monthActs = state.activities
+    .filter(a => (a.date || '').startsWith(month))
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  await Promise.all(monthActs.map(a => loadAttendanceForActivity(a.id)));
+
+  const trainingActs = monthActs.filter(a => (a.tipo || '') === 'Entrenamiento');
+  const matchActs    = monthActs.filter(a => (a.tipo || '') === 'Partido');
+  const totalTrain = trainingActs.length;
+  const totalMatch = matchActs.length;
+
+  // 2) Players filtered by team
+  const teamFilter = document.getElementById('asistenciaTeamFilter')?.value || 'Senior A';
+  let players = [...state.roster];
+  players.forEach(ensurePlayerShape);
+  if (teamFilter !== '__all__') {
+    players = players.filter(p => p.team === teamFilter);
+  }
+  players.sort((a, b) => {
+    const na = a.number != null ? Number(a.number) : 999;
+    const nb = b.number != null ? Number(b.number) : 999;
+    return na - nb;
+  });
+
+  if (monthActs.length === 0) {
+    container.innerHTML = '<div style="padding:20px; color:#5b6776; text-align:center;">No hay actividades en este mes.</div>';
+    return;
+  }
+  if (players.length === 0) {
+    container.innerHTML = '<div style="padding:20px; color:#5b6776; text-align:center;">Ningún jugador en el equipo seleccionado.</div>';
+    return;
+  }
+
+  // 3) Compute per-player counters
+  const rows = players.map(p => {
+    let trainAtt = 0, matchConv = 0, tarde = 0, totalAusencias = 0;
+    const motiveCounts = {};
+    ABSENCE_MOTIVES.forEach(m => { motiveCounts[m.code] = 0; });
+
+    monthActs.forEach(a => {
+      const rec = (state.attendanceByActivity[a.id] || []).find(r => r.personId === p.id);
+      if (!rec) return;
+      if (a.tipo === 'Entrenamiento' && rec.asistencia === true) trainAtt++;
+      if (a.tipo === 'Partido') {
+        const conv = typeof rec.convocado === 'boolean' ? rec.convocado : (rec.asistencia === true);
+        if (conv) matchConv++;
+      }
+      if (rec.asistencia === true && rec.puntualidad === false) tarde++;
+      // Total absences = any time the player didn't show up, regardless of
+      // whether a motive was recorded. Then broken down by motive in the
+      // per-motive columns.
+      if (rec.asistencia === false) totalAusencias++;
+      if (rec.asistencia === false && rec.motivoAusencia && motiveCounts.hasOwnProperty(rec.motivoAusencia)) {
+        motiveCounts[rec.motivoAusencia]++;
+      }
+    });
+    return { player: p, trainAtt, matchConv, tarde, totalAusencias, motiveCounts };
+  });
+
+  // 4) Render the table
+  const motiveHeaders = ABSENCE_MOTIVES.map(m =>
+    `<th title="${escapeHtml(m.label)}">${escapeHtml(m.label)}</th>`
+  ).join('');
+
+  let html = `
+    <table class="asistencia-table">
+      <thead>
+        <tr>
+          <th class="col-name">Nombre</th>
+          <th>Entrenos</th>
+          <th>Partidos</th>
+          <th>Tarde</th>
+          <th title="Total de ausencias del mes (suma del desglose)">Total Ausencias</th>
+          ${motiveHeaders}
+        </tr>
+      </thead>
+      <tbody>
+  `;
+  rows.forEach(r => {
+    const motiveCells = ABSENCE_MOTIVES.map(m => {
+      const n = r.motiveCounts[m.code] || 0;
+      return `<td class="${n > 0 ? 'has-count' : 'zero'}">${n || ''}</td>`;
+    }).join('');
+    html += `
+      <tr>
+        <td class="col-name">
+          <span class="dorsal">${r.player.number ?? '·'}</span>
+          <span class="name">${escapeHtml(r.player.name)}</span>
+        </td>
+        <td class="cell-count">${r.trainAtt}/${totalTrain}</td>
+        <td class="cell-count">${r.matchConv}/${totalMatch}</td>
+        <td class="${r.tarde > 0 ? 'has-count cell-late' : 'zero'}">${r.tarde || ''}</td>
+        <td class="${r.totalAusencias > 0 ? 'has-count cell-total-ausencias' : 'zero'}">${r.totalAusencias || ''}</td>
+        ${motiveCells}
+      </tr>
+    `;
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function exportAsistenciaReportCsv() {
+  const monthInput = document.getElementById('asistenciaMonth');
+  const month = monthInput.value || '';
+  const monthActs = state.activities
+    .filter(a => (a.date || '').startsWith(month))
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  if (monthActs.length === 0) { alert('No hay actividades en este mes.'); return; }
+
+  const trainingActs = monthActs.filter(a => (a.tipo || '') === 'Entrenamiento');
+  const matchActs    = monthActs.filter(a => (a.tipo || '') === 'Partido');
+  const totalTrain = trainingActs.length;
+  const totalMatch = matchActs.length;
+
+  const teamFilter = document.getElementById('asistenciaTeamFilter')?.value || 'Senior A';
+  let players = [...state.roster];
+  players.forEach(ensurePlayerShape);
+  if (teamFilter !== '__all__') {
+    players = players.filter(p => p.team === teamFilter);
+  }
+  players.sort((a, b) => {
+    const na = a.number != null ? Number(a.number) : 999;
+    const nb = b.number != null ? Number(b.number) : 999;
+    return na - nb;
+  });
+  if (players.length === 0) { alert('Ningún jugador en el equipo seleccionado.'); return; }
+
+  const esc = v => {
+    if (v == null) return '';
+    const s = String(v);
+    return /[",\r\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+
+  const header = ['Dorsal', 'Jugador', 'Equipo', 'Entrenos', 'Partidos', 'Tarde', 'Total Ausencias']
+    .concat(ABSENCE_MOTIVES.map(m => m.label));
+  const rows = [header];
+  players.forEach(p => {
+    let trainAtt = 0, matchConv = 0, tarde = 0, totalAusencias = 0;
+    const motiveCounts = {};
+    ABSENCE_MOTIVES.forEach(m => { motiveCounts[m.code] = 0; });
+    monthActs.forEach(a => {
+      const rec = (state.attendanceByActivity[a.id] || []).find(r => r.personId === p.id);
+      if (!rec) return;
+      if (a.tipo === 'Entrenamiento' && rec.asistencia === true) trainAtt++;
+      if (a.tipo === 'Partido') {
+        const conv = typeof rec.convocado === 'boolean' ? rec.convocado : (rec.asistencia === true);
+        if (conv) matchConv++;
+      }
+      if (rec.asistencia === true && rec.puntualidad === false) tarde++;
+      if (rec.asistencia === false) totalAusencias++;
+      if (rec.asistencia === false && rec.motivoAusencia && motiveCounts.hasOwnProperty(rec.motivoAusencia)) {
+        motiveCounts[rec.motivoAusencia]++;
+      }
+    });
+    const motiveVals = ABSENCE_MOTIVES.map(m => motiveCounts[m.code] || 0);
+    rows.push([
+      p.number ?? '',
+      p.name || '',
+      p.team || 'Senior A',
+      `${trainAtt}/${totalTrain}`,
+      `${matchConv}/${totalMatch}`,
+      tarde,
+      totalAusencias,
+      ...motiveVals,
+    ]);
+  });
+
+  const csv = rows.map(r => r.map(esc).join(',')).join('\r\n');
+  const blob = new Blob(['\ufeff' + csv], {type: 'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `informe_asistencia_${month || 'mes'}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ============================================================
 // EVENT BINDINGS
 // ============================================================
 document.getElementById('playPauseBtn').addEventListener('click', toggleTimer);
@@ -9717,6 +10003,10 @@ function goToView(viewId) {
         document.querySelector('.subtab[data-subview="detail"]')?.classList.contains('active')) {
       renderDetailedReport();
     }
+    if (document.querySelector('#subview-asistencia')?.style.display !== 'none' &&
+        document.querySelector('.subtab[data-subview="asistencia"]')?.classList.contains('active')) {
+      renderAsistenciaReport();
+    }
   }
   // Refresh the match view when entering it (bench/court reflect latest state)
   if (target === 'match') {
@@ -9974,17 +10264,21 @@ document.querySelectorAll('.subtab').forEach(t => {
     if (target === 'report') renderMonthlyReport();
     if (target === 'activities') renderActivitiesList();
     if (target === 'detail') renderDetailedReport();
+    if (target === 'asistencia') renderAsistenciaReport();
   });
 });
 
 // Detailed attendance report bindings
 document.getElementById('detailMonth').addEventListener('change', renderDetailedReport);
 document.getElementById('detailTeamFilter').addEventListener('change', () => {
-  // Reset the multi-select whenever the team changes so the label reads
-  // "todos los jugadores [del nuevo equipo]" and doesn't keep stale ids.
   detailSelectedPlayerIds = null;
   renderDetailedReport();
 });
+
+// Informe Asistencia bindings
+document.getElementById('asistenciaMonth').addEventListener('change', renderAsistenciaReport);
+document.getElementById('asistenciaTeamFilter').addEventListener('change', renderAsistenciaReport);
+document.getElementById('asistenciaExportCsvBtn').addEventListener('click', exportAsistenciaReportCsv);
 document.getElementById('detailPickPlayersBtn').addEventListener('click', () => {
   const panel = document.getElementById('detailPickPlayersPanel');
   const willOpen = panel.style.display === 'none';
