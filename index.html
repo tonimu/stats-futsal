@@ -1546,9 +1546,28 @@
     font-size: 11px;
     color: #334155;
     background: #ffffff;
-    padding: 4px 10px;
+    padding: 4px 8px;
     border-radius: 999px;
     font-variant-numeric: tabular-nums;
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    white-space: nowrap;
+  }
+  .activity-progress .progress-pair {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 4px;
+    border-right: 1px solid #e2e8f0;
+  }
+  .activity-progress .progress-pair:last-child { border-right: none; }
+  .activity-progress .progress-lbl {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #64748b;
+    font-weight: 700;
   }
 
   /* Match-only pills: competition + venue */
@@ -1836,6 +1855,84 @@
     .app-shell .navtab-label { opacity: 0; width: 0; overflow: hidden; }
     .app-shell .navtab { justify-content: center; padding: 12px 8px; }
   }
+
+  /* ===== DETAILED ATTENDANCE REPORT ===== */
+  .detail-player-block {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 14px;
+  }
+  .detail-player-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .detail-player-name {
+    font-weight: 800;
+    font-size: 16px;
+    color: #0f172a;
+  }
+  .detail-summary {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-left: auto;
+  }
+  .detail-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #f1f5f9;
+    color: #334155;
+  }
+  .detail-chip b { font-weight: 800; font-size: 14px; }
+  .detail-chip.chip-training { background: #dbeafe; color: #1e40af; }
+  .detail-chip.chip-match { background: #d1fae5; color: #065f46; }
+  .detail-chip.chip-late { background: #fef3c7; color: #78350f; }
+  .detail-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .detail-table th, .detail-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: left;
+    vertical-align: top;
+  }
+  .detail-table th {
+    background: #f8fafc;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #64748b;
+    font-weight: 700;
+    position: sticky;
+    top: 0;
+  }
+  .detail-table tbody tr:hover { background: #f8fafc; }
+  /* Pills used in the detail table cells */
+  .pill-yes, .pill-no, .pill-late, .pill-pending {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .pill-yes     { background: #d1fae5; color: #065f46; }
+  .pill-no      { background: #fee2e2; color: #991b1b; }
+  .pill-late    { background: #fef3c7; color: #78350f; }
+  .pill-pending { background: #f1f5f9; color: #64748b; }
 </style>
 </head>
 <body>
@@ -2315,6 +2412,7 @@
     <div class="tabs" style="background:transparent; border:none; padding:0; margin-bottom:12px;">
       <button class="subtab active" data-subview="activities">Actividades</button>
       <button class="subtab" data-subview="report">Informe mensual</button>
+      <button class="subtab" data-subview="detail">Informe detallado</button>
     </div>
 
     <!-- Subview: Activities list -->
@@ -2364,6 +2462,28 @@
           </div>
         </div>
         <div id="reportContainer" style="overflow-x:auto;"></div>
+      </div>
+    </div>
+
+    <!-- Subview: Detailed per-player report (Toni's ask) -->
+    <div class="subview" id="subview-detail" style="display:none;">
+      <div class="panel">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
+          <div class="panel-title" style="margin:0;">Informe detallado</div>
+          <input type="month" id="detailMonth" class="form-input" title="Mes del informe">
+          <button class="btn btn-ghost" id="detailPickPlayersBtn" title="Elegir jugadores">👥 <span id="detailPickPlayersLabel">Todos los jugadores</span></button>
+          <button class="btn btn-primary" id="detailExportCsvBtn" style="margin-left:auto;" title="Descargar CSV">📥 Exportar CSV</button>
+        </div>
+        <!-- Player picker panel (hidden by default) -->
+        <div id="detailPickPlayersPanel" style="display:none; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; margin-bottom:12px;">
+          <div style="display:flex; gap:8px; margin-bottom:8px;">
+            <button class="btn btn-ghost btn-tiny" id="detailPickAllBtn">Marcar todos</button>
+            <button class="btn btn-ghost btn-tiny" id="detailPickNoneBtn">Desmarcar todos</button>
+            <button class="btn btn-ghost btn-tiny" id="detailPickCloseBtn" style="margin-left:auto;">Cerrar</button>
+          </div>
+          <div id="detailPickPlayersList" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:4px;"></div>
+        </div>
+        <div id="detailContainer" style="overflow-x:auto;"></div>
       </div>
     </div>
   </div>
@@ -8510,10 +8630,20 @@ function renderActivitiesList() {
   // Get attendance counts in parallel
   Promise.all(sorted.map(a => loadAttendanceForActivity(a.id))).then(() => {
     list.innerHTML = '';
-    const totalPeople = state.roster.length + state.staff.length;
+    const totalPlayers = state.roster.length;
+    const totalStaff = state.staff.length;
+    const playerIds = new Set(state.roster.map(p => p.id));
+    const staffIds = new Set(state.staff.map(s => s.id));
     sorted.forEach(act => {
       const recs = state.attendanceByActivity[act.id] || [];
-      const recorded = recs.filter(r => r.asistencia !== null).length;
+      // Split "attends" counts by person type. Attendance=true covers both "Sí"
+      // and "Tarde" (Tarde = asistencia:true + puntualidad:false).
+      let playersAttend = 0, staffAttend = 0;
+      recs.forEach(r => {
+        if (r.asistencia !== true) return;
+        if (playerIds.has(r.personId)) playersAttend++;
+        else if (staffIds.has(r.personId)) staffAttend++;
+      });
       const cls = (act.tipo || '').toLowerCase();
       const titleParts = [];
       if (act.tipo === 'Partido' && act.opponent) titleParts.push(`vs ${act.opponent}`);
@@ -8545,7 +8675,10 @@ function renderActivitiesList() {
             ${matchPills}
           </div>
         </div>
-        <span class="activity-progress">${recorded}/${totalPeople} registrados</span>
+        <span class="activity-progress" title="Cuántos han marcado que asisten (Sí o Tarde)">
+          <span class="progress-pair"><span class="progress-lbl">👥 Jug.</span> ${playersAttend}/${totalPlayers}</span>
+          <span class="progress-pair"><span class="progress-lbl">💼 Staff</span> ${staffAttend}/${totalStaff}</span>
+        </span>
         <button class="btn btn-ghost" data-edit-act="${act.id}" style="padding:8px 12px; font-size:12px;">✎</button>
         <button class="btn btn-primary" data-open="${act.id}" style="padding:8px 14px;">Abrir</button>
         <button class="btn btn-danger" data-del-act="${act.id}" style="padding:8px 12px; font-size:12px;">✕</button>
@@ -8885,6 +9018,289 @@ async function renderMonthlyReport() {
 
   html += '</tbody></table>';
   container.innerHTML = html;
+}
+
+// ============================================================
+// DETAILED PER-PLAYER ATTENDANCE REPORT
+// ============================================================
+// Same monthly filter as the monthly report, but one row per (player,
+// activity) with all attendance details. Includes summary cards per player
+// (trainings attended, matches convoked, times late) and CSV export. Toni's
+// ask: "una tabla con fecha, actividad, partido si toca, convocado, asiste,
+// tarde y observaciones + etiquetas superiores por jugador".
+
+// Persist selected players between renders (starts as null = "all").
+let detailSelectedPlayerIds = null;
+
+async function renderDetailedReport() {
+  const monthInput = document.getElementById('detailMonth');
+  if (!monthInput.value) {
+    const now = new Date();
+    monthInput.value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  }
+  const month = monthInput.value; // YYYY-MM
+  const container = document.getElementById('detailContainer');
+
+  // 1) Activities of the selected month, sorted ascending
+  const monthActs = state.activities
+    .filter(a => (a.date || '').startsWith(month))
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  await Promise.all(monthActs.map(a => loadAttendanceForActivity(a.id)));
+
+  // 2) Which players to include (default: all of senior A / current roster)
+  const allPlayers = [...state.roster].sort((a, b) => {
+    const na = a.number != null ? Number(a.number) : 999;
+    const nb = b.number != null ? Number(b.number) : 999;
+    return na - nb;
+  });
+  const selectedSet = detailSelectedPlayerIds; // null = all
+  const players = selectedSet
+    ? allPlayers.filter(p => selectedSet.has(p.id))
+    : allPlayers;
+
+  updateDetailPickerLabel(players.length, allPlayers.length);
+
+  if (monthActs.length === 0) {
+    container.innerHTML = '<div style="padding:20px; color:#5b6776; text-align:center;">No hay actividades en este mes.</div>';
+    return;
+  }
+  if (players.length === 0) {
+    container.innerHTML = '<div style="padding:20px; color:#5b6776; text-align:center;">Ningún jugador seleccionado. Usa 👥 arriba para elegir.</div>';
+    return;
+  }
+
+  // 3) Split activities by type so we can build accurate totals
+  const trainingActs = monthActs.filter(a => (a.tipo || '') === 'Entrenamiento');
+  const matchActs    = monthActs.filter(a => (a.tipo || '') === 'Partido');
+
+  // 4) Build a section per player: summary chips + detailed table
+  let html = '';
+  players.forEach(p => {
+    // Compute per-player summary counters for the month
+    let trainAtt = 0, matchConv = 0, tarde = 0;
+    monthActs.forEach(a => {
+      const rec = (state.attendanceByActivity[a.id] || []).find(r => r.personId === p.id);
+      if (!rec) return;
+      if (a.tipo === 'Entrenamiento' && rec.asistencia === true) trainAtt++;
+      // "Convocado" for matches: use new field if set, else fall back to attended
+      if (a.tipo === 'Partido') {
+        const convoked = typeof rec.convocado === 'boolean' ? rec.convocado : (rec.asistencia === true);
+        if (convoked) matchConv++;
+      }
+      if (rec.asistencia === true && rec.puntualidad === false) tarde++;
+    });
+
+    html += `
+      <div class="detail-player-block">
+        <div class="detail-player-header">
+          <span class="detail-player-name">#${p.number ?? '·'} · ${escapeHtml(p.name)}</span>
+          <div class="detail-summary">
+            <span class="detail-chip chip-training">🏃 Entrenos: <b>${trainAtt}</b> / ${trainingActs.length}</span>
+            <span class="detail-chip chip-match">⚽ Convocado: <b>${matchConv}</b> / ${matchActs.length}</span>
+            <span class="detail-chip chip-late">⏰ Tarde: <b>${tarde}</b></span>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="detail-table">
+            <thead><tr>
+              <th style="min-width:80px;">Fecha</th>
+              <th>Actividad</th>
+              <th>Partido</th>
+              <th style="min-width:90px;">Convocado</th>
+              <th style="min-width:80px;">Asiste</th>
+              <th style="min-width:80px;">Tarde</th>
+              <th style="min-width:180px;">Observaciones</th>
+            </tr></thead>
+            <tbody>
+              ${monthActs.map(a => detailRowFor(p.id, a)).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+// Render a single row for a (player, activity) pair. Uses attendance data
+// already loaded in state.attendanceByActivity.
+function detailRowFor(personId, act) {
+  const rec = (state.attendanceByActivity[act.id] || []).find(r => r.personId === personId);
+  const dateTxt = formatActivityDate(act.date);
+  const timeTxt = act.time ? ` <span style="color:#94a3b8;">${act.time}</span>` : '';
+  const tipo = act.tipo || '';
+  const partidoTxt = tipo === 'Partido'
+    ? `${escapeHtml(act.opponent || '?')}${act.venue ? ' · ' + act.venue : ''}${act.competition ? ' · ' + act.competition : ''}`
+    : '—';
+
+  // Convocado column: only makes sense for Partido; blank for other types
+  let convCell = '—';
+  if (tipo === 'Partido' && rec) {
+    if (typeof rec.convocado === 'boolean') {
+      convCell = rec.convocado
+        ? '<span class="pill-yes">Sí</span>'
+        : '<span class="pill-no">No</span>';
+    } else {
+      // Legacy fallback: no convocado field → assume convocado = attended
+      convCell = rec.asistencia === true
+        ? '<span class="pill-yes" title="Legacy: inferido de asistencia">Sí*</span>'
+        : rec.asistencia === false
+          ? '<span class="pill-no" title="Legacy: inferido de asistencia">No*</span>'
+          : '<span class="pill-pending">—</span>';
+    }
+  }
+
+  // Asiste / Tarde columns
+  let asisteCell = '<span class="pill-pending">—</span>';
+  let tardeCell = '';
+  if (rec) {
+    if (rec.asistencia === true) {
+      asisteCell = '<span class="pill-yes">Sí</span>';
+      tardeCell = rec.puntualidad === false ? '<span class="pill-late">Sí</span>' : '<span class="pill-no">No</span>';
+    } else if (rec.asistencia === false) {
+      asisteCell = rec.motivoAusencia
+        ? `<span class="pill-no" title="${escapeHtml(rec.motivoAusencia)}">No (${escapeHtml(rec.motivoAusencia)})</span>`
+        : '<span class="pill-no">No</span>';
+      tardeCell = '—';
+    }
+  }
+
+  const obs = rec && rec.observaciones ? escapeHtml(rec.observaciones) : '';
+
+  return `<tr>
+    <td>${dateTxt}${timeTxt}</td>
+    <td>${escapeHtml(tipo)}${act.location ? ' · <span style="color:#94a3b8;">' + escapeHtml(act.location) + '</span>' : ''}</td>
+    <td>${partidoTxt}</td>
+    <td>${convCell}</td>
+    <td>${asisteCell}</td>
+    <td>${tardeCell}</td>
+    <td style="font-size:11px;">${obs}</td>
+  </tr>`;
+}
+
+function updateDetailPickerLabel(selCount, totalCount) {
+  const lbl = document.getElementById('detailPickPlayersLabel');
+  if (!lbl) return;
+  if (detailSelectedPlayerIds === null || selCount === totalCount) {
+    lbl.textContent = 'Todos los jugadores';
+  } else if (selCount === 0) {
+    lbl.textContent = 'Ninguno';
+  } else if (selCount === 1) {
+    // Show the single player's name
+    const pid = [...detailSelectedPlayerIds][0];
+    const p = getPlayer(pid);
+    lbl.textContent = p ? `${p.number ?? '·'} · ${p.name}` : '1 jugador';
+  } else {
+    lbl.textContent = `${selCount} jugadores`;
+  }
+}
+
+function renderDetailPlayerPicker() {
+  const list = document.getElementById('detailPickPlayersList');
+  if (!list) return;
+  const allPlayers = [...state.roster].sort((a, b) => {
+    const na = a.number != null ? Number(a.number) : 999;
+    const nb = b.number != null ? Number(b.number) : 999;
+    return na - nb;
+  });
+  // If no persisted selection, start with "everyone selected" so the checkboxes
+  // reflect the current effective view.
+  if (detailSelectedPlayerIds === null) {
+    detailSelectedPlayerIds = new Set(allPlayers.map(p => p.id));
+  }
+  list.innerHTML = allPlayers.map(p => `
+    <label style="display:flex; align-items:center; gap:6px; padding:4px 6px; background:#fff; border-radius:6px; cursor:pointer; font-size:13px;">
+      <input type="checkbox" data-pick-pid="${p.id}" ${detailSelectedPlayerIds.has(p.id) ? 'checked' : ''}>
+      <span style="font-weight:700; color:#334155;">${p.number ?? '·'}</span>
+      <span>${escapeHtml(p.name)}</span>
+    </label>
+  `).join('');
+  list.querySelectorAll('[data-pick-pid]').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const pid = e.currentTarget.dataset.pickPid;
+      if (e.currentTarget.checked) detailSelectedPlayerIds.add(pid);
+      else detailSelectedPlayerIds.delete(pid);
+      renderDetailedReport();
+    });
+  });
+}
+
+// Build a CSV of what the current detailed report shows. One row per
+// (player, activity) with the same columns as the on-screen table.
+function exportDetailedReportCsv() {
+  const monthInput = document.getElementById('detailMonth');
+  const month = monthInput.value || '';
+  const monthActs = state.activities
+    .filter(a => (a.date || '').startsWith(month))
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  if (monthActs.length === 0) { alert('No hay actividades en este mes.'); return; }
+
+  const allPlayers = [...state.roster].sort((a, b) => {
+    const na = a.number != null ? Number(a.number) : 999;
+    const nb = b.number != null ? Number(b.number) : 999;
+    return na - nb;
+  });
+  const players = detailSelectedPlayerIds
+    ? allPlayers.filter(p => detailSelectedPlayerIds.has(p.id))
+    : allPlayers;
+  if (players.length === 0) { alert('Ningún jugador seleccionado.'); return; }
+
+  // CSV helper: escape a field per RFC 4180 (wrap in quotes if it contains
+  // comma/quote/newline, and double any inner quote). Excel & Google Sheets
+  // both accept UTF-8 with BOM, so we prepend one for accents to render right.
+  const esc = v => {
+    if (v == null) return '';
+    const s = String(v);
+    return /[",\r\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+
+  const rows = [];
+  rows.push(['Dorsal','Jugador','Fecha','Hora','Actividad','Localización','Rival','Competición','Localía','Convocado','Asiste','Tarde','Motivo ausencia','Observaciones']);
+  players.forEach(p => {
+    monthActs.forEach(a => {
+      const rec = (state.attendanceByActivity[a.id] || []).find(r => r.personId === p.id);
+      let convoked = '';
+      if (a.tipo === 'Partido' && rec) {
+        if (typeof rec.convocado === 'boolean') convoked = rec.convocado ? 'Sí' : 'No';
+        else if (rec.asistencia === true) convoked = 'Sí';
+        else if (rec.asistencia === false) convoked = 'No';
+      }
+      let asiste = '';
+      if (rec) {
+        if (rec.asistencia === true) asiste = 'Sí';
+        else if (rec.asistencia === false) asiste = 'No';
+      }
+      const tarde = (rec && rec.asistencia === true && rec.puntualidad === false) ? 'Sí' : '';
+      rows.push([
+        p.number ?? '',
+        p.name || '',
+        a.date || '',
+        a.time || '',
+        a.tipo || '',
+        a.location || '',
+        a.opponent || '',
+        a.competition || '',
+        a.venue || '',
+        convoked,
+        asiste,
+        tarde,
+        (rec && rec.motivoAusencia) || '',
+        (rec && rec.observaciones) || '',
+      ]);
+    });
+  });
+
+  const csv = rows.map(r => r.map(esc).join(',')).join('\r\n');
+  const blob = new Blob(['\ufeff' + csv], {type: 'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `asistencia_detallada_${month || 'informe'}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ============================================================
@@ -9238,6 +9654,10 @@ function goToView(viewId) {
         document.querySelector('.subtab[data-subview="report"]')?.classList.contains('active')) {
       renderMonthlyReport();
     }
+    if (document.querySelector('#subview-detail')?.style.display !== 'none' &&
+        document.querySelector('.subtab[data-subview="detail"]')?.classList.contains('active')) {
+      renderDetailedReport();
+    }
   }
   // Refresh the match view when entering it (bench/court reflect latest state)
   if (target === 'match') {
@@ -9494,8 +9914,32 @@ document.querySelectorAll('.subtab').forEach(t => {
     if (el) el.style.display = 'block';
     if (target === 'report') renderMonthlyReport();
     if (target === 'activities') renderActivitiesList();
+    if (target === 'detail') renderDetailedReport();
   });
 });
+
+// Detailed attendance report bindings
+document.getElementById('detailMonth').addEventListener('change', renderDetailedReport);
+document.getElementById('detailPickPlayersBtn').addEventListener('click', () => {
+  const panel = document.getElementById('detailPickPlayersPanel');
+  const willOpen = panel.style.display === 'none';
+  panel.style.display = willOpen ? 'block' : 'none';
+  if (willOpen) renderDetailPlayerPicker();
+});
+document.getElementById('detailPickCloseBtn').addEventListener('click', () => {
+  document.getElementById('detailPickPlayersPanel').style.display = 'none';
+});
+document.getElementById('detailPickAllBtn').addEventListener('click', () => {
+  detailSelectedPlayerIds = new Set(state.roster.map(p => p.id));
+  renderDetailPlayerPicker();
+  renderDetailedReport();
+});
+document.getElementById('detailPickNoneBtn').addEventListener('click', () => {
+  detailSelectedPlayerIds = new Set();
+  renderDetailPlayerPicker();
+  renderDetailedReport();
+});
+document.getElementById('detailExportCsvBtn').addEventListener('click', exportDetailedReportCsv);
 
 // Staff: add new staff member
 // Toggle the "add staff" form panel
