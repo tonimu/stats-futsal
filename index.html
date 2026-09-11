@@ -1127,6 +1127,21 @@
     border-radius: 999px;
     white-space: nowrap;
   }
+  /* Team badge — quick visual to distinguish who's from Senior A ("plantilla")
+     from Senior B / Juvenil Nacional players who come up to help. */
+  .team-badge {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 3px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .team-badge-senior-a          { background: #dcfce7; color: #14532d; border-color: #86efac; }
+  .team-badge-senior-b          { background: #dbeafe; color: #1e3a8a; border-color: #93c5fd; }
+  .team-badge-juvenil-nacional  { background: #fef3c7; color: #78350f; border-color: #fbbf24; }
   .roster-traits-row {
     display: flex;
     flex-wrap: wrap;
@@ -2471,6 +2486,12 @@
         <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
           <div class="panel-title" style="margin:0;">Informe detallado</div>
           <input type="month" id="detailMonth" class="form-input" title="Mes del informe">
+          <select id="detailTeamFilter" class="form-input" title="Filtrar por equipo">
+            <option value="Senior A" selected>Solo Senior A</option>
+            <option value="Senior B">Solo Senior B</option>
+            <option value="Juvenil Nacional">Solo Juvenil Nacional</option>
+            <option value="__all__">Todos los equipos</option>
+          </select>
           <button class="btn btn-ghost" id="detailPickPlayersBtn" title="Elegir jugadores">👥 <span id="detailPickPlayersLabel">Todos los jugadores</span></button>
           <button class="btn btn-primary" id="detailExportCsvBtn" style="margin-left:auto;" title="Descargar CSV">📥 Exportar CSV</button>
         </div>
@@ -3595,6 +3616,11 @@ const POSITIONS = ['Portero', 'Cierre', 'Ala', 'Pívot'];
 // Available physical / play traits
 const TRAITS = ['Zurdo', 'Diestro', 'Ambidiestro', 'Rápido', 'Goleador', 'Defensivo', 'Técnico', 'Físico', 'Joven', 'Capitán'];
 
+// Team categories a player can belong to. First one is the default for new/
+// existing players. Kept as a fixed list (rather than free text) so the UI
+// can colour-code them consistently and the "senior A only" filter works.
+const TEAMS = ['Senior A', 'Senior B', 'Juvenil Nacional'];
+
 // Staff roles (fixed list — "Otro" lets you add anyone not covered)
 const STAFF_ROLES = [
   'Primer Entrenador',
@@ -3638,6 +3664,7 @@ function ensurePlayerShape(p) {
   if (!Array.isArray(p.traits)) p.traits = [];
   if (typeof p.isGK !== 'boolean') p.isGK = p.position === 'Portero';
   if (typeof p.birthDate !== 'string') p.birthDate = '';   // ISO YYYY-MM-DD
+  if (!p.team || !TEAMS.includes(p.team)) p.team = 'Senior A';  // default team
   // keep isGK in sync with position
   p.isGK = p.position === 'Portero';
   return p;
@@ -6885,9 +6912,15 @@ function renderRoster() {
     const posOptions = POSITIONS.map(pos =>
       `<option value="${pos}" ${p.position === pos ? 'selected' : ''}>${pos}</option>`
     ).join('');
+    const teamOptions = TEAMS.map(t =>
+      `<option value="${t}" ${p.team === t ? 'selected' : ''}>${t}</option>`
+    ).join('');
     const traitChips = TRAITS.map(t =>
       `<button class="trait-chip ${p.traits.includes(t) ? 'active' : ''}" data-pid="${p.id}" data-trait="${t}">${t}</button>`
     ).join('');
+    // Team badge class: lowercased + spaces → dashes so we can style each
+    // category with a distinct colour.
+    const teamCls = 'team-badge-' + (p.team || 'Senior A').toLowerCase().replace(/\s+/g, '-');
 
     div.innerHTML = `
       <div class="roster-item-row">
@@ -6899,6 +6932,9 @@ function renderRoster() {
         <input type="text" value="${escapeHtml(p.alias)}" data-id="${p.id}" data-field="alias" placeholder="Alias" style="max-width:140px;">
         <span class="roster-item-label">Pos</span>
         <select data-id="${p.id}" data-field="position">${posOptions}</select>
+        <span class="roster-item-label">Equipo</span>
+        <select data-id="${p.id}" data-field="team">${teamOptions}</select>
+        <span class="team-badge ${teamCls}" title="Equipo actual">${escapeHtml(p.team || 'Senior A')}</span>
         <span class="roster-item-label">F. Nac.</span>
         <input type="date" value="${p.birthDate || ''}" data-id="${p.id}" data-field="birthDate" style="width:150px;">
         <span class="age-badge" title="Edad calculada">${ageFromBirthDate(p.birthDate) !== null ? ageFromBirthDate(p.birthDate) + ' años' : '—'}</span>
@@ -9047,8 +9083,15 @@ async function renderDetailedReport() {
     .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   await Promise.all(monthActs.map(a => loadAttendanceForActivity(a.id)));
 
-  // 2) Which players to include (default: all of senior A / current roster)
-  const allPlayers = [...state.roster].sort((a, b) => {
+  // 2) Which players to include: first filter by team (Senior A / B / Juvenil),
+  //    then by the explicit multi-select (checkboxes) if any.
+  const teamFilter = document.getElementById('detailTeamFilter')?.value || 'Senior A';
+  let allPlayers = [...state.roster];
+  allPlayers.forEach(ensurePlayerShape);
+  if (teamFilter !== '__all__') {
+    allPlayers = allPlayers.filter(p => p.team === teamFilter);
+  }
+  allPlayers.sort((a, b) => {
     const na = a.number != null ? Number(a.number) : 999;
     const nb = b.number != null ? Number(b.number) : 999;
     return na - nb;
@@ -9199,7 +9242,13 @@ function updateDetailPickerLabel(selCount, totalCount) {
 function renderDetailPlayerPicker() {
   const list = document.getElementById('detailPickPlayersList');
   if (!list) return;
-  const allPlayers = [...state.roster].sort((a, b) => {
+  const teamFilter = document.getElementById('detailTeamFilter')?.value || 'Senior A';
+  let allPlayers = [...state.roster];
+  allPlayers.forEach(ensurePlayerShape);
+  if (teamFilter !== '__all__') {
+    allPlayers = allPlayers.filter(p => p.team === teamFilter);
+  }
+  allPlayers.sort((a, b) => {
     const na = a.number != null ? Number(a.number) : 999;
     const nb = b.number != null ? Number(b.number) : 999;
     return na - nb;
@@ -9209,13 +9258,16 @@ function renderDetailPlayerPicker() {
   if (detailSelectedPlayerIds === null) {
     detailSelectedPlayerIds = new Set(allPlayers.map(p => p.id));
   }
-  list.innerHTML = allPlayers.map(p => `
+  list.innerHTML = allPlayers.map(p => {
+    const teamCls = 'team-badge-' + (p.team || 'Senior A').toLowerCase().replace(/\s+/g, '-');
+    return `
     <label style="display:flex; align-items:center; gap:6px; padding:4px 6px; background:#fff; border-radius:6px; cursor:pointer; font-size:13px;">
       <input type="checkbox" data-pick-pid="${p.id}" ${detailSelectedPlayerIds.has(p.id) ? 'checked' : ''}>
       <span style="font-weight:700; color:#334155;">${p.number ?? '·'}</span>
-      <span>${escapeHtml(p.name)}</span>
+      <span style="flex:1;">${escapeHtml(p.name)}</span>
+      <span class="team-badge ${teamCls}" style="font-size:9px;">${escapeHtml(p.team || 'Senior A')}</span>
     </label>
-  `).join('');
+  `;}).join('');
   list.querySelectorAll('[data-pick-pid]').forEach(cb => {
     cb.addEventListener('change', e => {
       const pid = e.currentTarget.dataset.pickPid;
@@ -9236,7 +9288,13 @@ function exportDetailedReportCsv() {
     .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   if (monthActs.length === 0) { alert('No hay actividades en este mes.'); return; }
 
-  const allPlayers = [...state.roster].sort((a, b) => {
+  const teamFilter = document.getElementById('detailTeamFilter')?.value || 'Senior A';
+  let allPlayers = [...state.roster];
+  allPlayers.forEach(ensurePlayerShape);
+  if (teamFilter !== '__all__') {
+    allPlayers = allPlayers.filter(p => p.team === teamFilter);
+  }
+  allPlayers.sort((a, b) => {
     const na = a.number != null ? Number(a.number) : 999;
     const nb = b.number != null ? Number(b.number) : 999;
     return na - nb;
@@ -9256,7 +9314,7 @@ function exportDetailedReportCsv() {
   };
 
   const rows = [];
-  rows.push(['Dorsal','Jugador','Fecha','Hora','Actividad','Localización','Rival','Competición','Localía','Convocado','Asiste','Tarde','Motivo ausencia','Observaciones']);
+  rows.push(['Dorsal','Jugador','Equipo','Fecha','Hora','Actividad','Localización','Rival','Competición','Localía','Convocado','Asiste','Tarde','Motivo ausencia','Observaciones']);
   players.forEach(p => {
     monthActs.forEach(a => {
       const rec = (state.attendanceByActivity[a.id] || []).find(r => r.personId === p.id);
@@ -9275,6 +9333,7 @@ function exportDetailedReportCsv() {
       rows.push([
         p.number ?? '',
         p.name || '',
+        p.team || 'Senior A',
         a.date || '',
         a.time || '',
         a.tipo || '',
@@ -9920,6 +9979,12 @@ document.querySelectorAll('.subtab').forEach(t => {
 
 // Detailed attendance report bindings
 document.getElementById('detailMonth').addEventListener('change', renderDetailedReport);
+document.getElementById('detailTeamFilter').addEventListener('change', () => {
+  // Reset the multi-select whenever the team changes so the label reads
+  // "todos los jugadores [del nuevo equipo]" and doesn't keep stale ids.
+  detailSelectedPlayerIds = null;
+  renderDetailedReport();
+});
 document.getElementById('detailPickPlayersBtn').addEventListener('click', () => {
   const panel = document.getElementById('detailPickPlayersPanel');
   const willOpen = panel.style.display === 'none';
