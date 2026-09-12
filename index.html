@@ -2737,22 +2737,69 @@
 </div>
 
 <!-- ===== ATAQUE / DEFENSA CONFIG MODAL ===== -->
-<!-- Opens when the user taps the ⚔️ AtqDef topbar button and the mode is off.-->
-<!-- Lets Toni define up to 2 pairs of {attacker, defender} that will rotate  -->
-<!-- between court and bench with a single tap while the mode is active.      -->
-<div class="modal-backdrop" id="atkDefModal" style="display:none;">
-  <div class="modal" style="max-width:640px;">
+<!-- ===== HISTORY: EVENT LOG MODAL (read-only browse of a finished match) ===== -->
+<!-- Opens from the History tab. Shows the same event table as the live log -->
+<!-- so Toni can quickly find goals/actions (e.g. to cut clips for socials). -->
+<!-- Includes quick filter chips: All / Goals / Penalties / Cards / Subs.    -->
+<div class="modal-backdrop" id="historyLogModal" style="display:none;">
+  <div class="modal" style="max-width:960px; max-height:90vh; display:flex; flex-direction:column;">
     <div class="modal-title">
-      <span>⚔️ Configurar Ataque / Defensa</span>
+      <span id="historyLogTitle">📋 Log del partido</span>
+      <button class="btn btn-ghost" id="closeHistoryLogModal">✕</button>
+    </div>
+    <!-- Quick filter chips: keeps the "find a goal fast" flow tight -->
+    <div id="historyLogFilters" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+      <button class="filter-chip active" data-histfilter="all">Todo</button>
+      <button class="filter-chip" data-histfilter="goals">⚽ Goles</button>
+      <button class="filter-chip" data-histfilter="chances">🎯 Ocasiones</button>
+      <button class="filter-chip" data-histfilter="penalties">🥅 Penaltis</button>
+      <button class="filter-chip" data-histfilter="cards">🟨🟥 Tarjetas</button>
+      <button class="filter-chip" data-histfilter="subs">🔄 Cambios</button>
+    </div>
+    <div id="historyLogContainer" style="overflow:auto; flex:1;"></div>
+  </div>
+</div>
+
+<!-- ===== ATAQUE / DEFENSA WIZARD (3 steps: court → role → bench) ===== -->
+<!-- Opens when the user taps the ⚔️ AtqDef topbar button (mode off) or the   -->
+<!-- "+ Añadir pareja" button in the orange pairs panel. Fast 3-step flow:   -->
+<!--   1. Pick a player on the court (sorted by slot: GK, Cierre, Ala, Ala, Pívot) -->
+<!--   2. Pick their role (Attacker or Defender)                              -->
+<!--   3. Pick a player from the bench — takes the OTHER role automatically   -->
+<div class="modal-backdrop" id="atkDefModal" style="display:none;">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-title">
+      <span id="atkDefWizTitle">⚔️ Añadir pareja Ataque/Defensa</span>
       <button class="btn btn-ghost" id="closeAtkDefModal">✕</button>
     </div>
-    <div style="font-size:12px; color:#5b6776; margin-bottom:12px;">
-      Elige hasta 2 parejas. En cada pareja, uno actúa de <b>atacante</b> y otro de <b>defensor</b>. Uno debe estar en pista y el otro en el banquillo. Podrás rotarlos con un solo toque desde el banquillo.
+
+    <!-- Step 1: player on court -->
+    <div id="atkDefStepCourt">
+      <div style="font-size:12px; color:#5b6776; margin-bottom:10px;">1. Elige el jugador de pista que forma la pareja:</div>
+      <div id="atkDefCourtList" class="player-grid"></div>
     </div>
-    <div id="atkDefPairsConfig"></div>
-    <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
-      <button class="btn btn-ghost" id="atkDefAddPairBtn">+ Añadir pareja</button>
-      <button class="btn btn-primary" id="atkDefActivateBtn" style="flex:1;">Guardar y activar</button>
+
+    <!-- Step 2: role -->
+    <div id="atkDefStepRole" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div style="font-size:12px; color:#5b6776;">2. ¿Actúa como atacante o defensor?</div>
+        <button class="btn btn-ghost btn-tiny" id="atkDefBackRoleBtn">← Volver</button>
+      </div>
+      <div id="atkDefRoleHint" style="padding:8px 12px; background:#f1f5f9; border-radius:6px; font-size:12px; margin-bottom:10px;"></div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <button class="btn" data-atkdef-role="attacker" style="background:#fee2e2; color:#7f1d1d; border:2px solid #ea580c; padding:24px; font-weight:800; font-size:18px;">⚔️ ATACANTE</button>
+        <button class="btn" data-atkdef-role="defender" style="background:#dbeafe; color:#1e3a8a; border:2px solid #3b82f6; padding:24px; font-weight:800; font-size:18px;">🛡️ DEFENSOR</button>
+      </div>
+    </div>
+
+    <!-- Step 3: player on bench -->
+    <div id="atkDefStepBench" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div style="font-size:12px; color:#5b6776;">3. Elige compañero del banquillo:</div>
+        <button class="btn btn-ghost btn-tiny" id="atkDefBackBenchBtn">← Volver</button>
+      </div>
+      <div id="atkDefBenchHint" style="padding:8px 12px; background:#f1f5f9; border-radius:6px; font-size:12px; margin-bottom:10px;"></div>
+      <div id="atkDefBenchList" class="player-grid"></div>
     </div>
   </div>
 </div>
@@ -3709,6 +3756,10 @@ const TRAITS = ['Zurdo', 'Diestro', 'Ambidiestro', 'Rápido', 'Goleador', 'Defen
 // existing players. Kept as a fixed list (rather than free text) so the UI
 // can colour-code them consistently and the "senior A only" filter works.
 const TEAMS = ['Senior A', 'Senior B', 'Juvenil Nacional'];
+
+// Max simultaneous Attack/Defence pairs. Raised from 2 to 4 because the coach
+// can rotate up to 4 outfield slots (everyone except the goalkeeper).
+const MAX_ATKDEF_PAIRS = 4;
 
 // Staff roles (fixed list — "Otro" lets you add anyone not covered)
 const STAFF_ROLES = [
@@ -4847,9 +4898,9 @@ function renderAtkDefPairsPanel() {
   container.innerHTML = `
     <div class="atkdef-pairs-panel">
       <div class="atkdef-header">
-        <span>⚔️ ATAQUE / DEFENSA · ${pairs.length}/2 parejas</span>
+        <span>⚔️ ATAQUE / DEFENSA · ${pairs.length}/${MAX_ATKDEF_PAIRS} parejas</span>
         <div style="display:flex; gap:6px;">
-          ${pairs.length < 2 ? '<button class="btn btn-ghost btn-tiny" id="atkDefAddPairInlineBtn" title="Añadir otra pareja">+ Añadir pareja</button>' : ''}
+          ${pairs.length < MAX_ATKDEF_PAIRS ? '<button class="btn btn-ghost btn-tiny" id="atkDefAddPairInlineBtn" title="Añadir otra pareja">+ Añadir pareja</button>' : ''}
           <button class="btn btn-ghost btn-tiny" id="atkDefDeactivateBtn" title="Desactivar el modo (deshace todas las parejas)">✕ Desactivar todo</button>
         </div>
       </div>
@@ -4892,13 +4943,8 @@ function renderAtkDefPairsPanel() {
   const addBtn = document.getElementById('atkDefAddPairInlineBtn');
   if (addBtn) {
     addBtn.addEventListener('click', () => {
-      // Open the config modal preserving the existing pair(s) + an empty row
-      // so Toni just fills the new pair without redoing what's already there.
+      // Opens the 3-step wizard directly to build one new pair fast.
       openAtkDefModal();
-      if (atkDefDraft.length < 2) {
-        atkDefDraft.push({attackerId: null, defenderId: null});
-        renderAtkDefConfig();
-      }
     });
   }
 }
@@ -4930,138 +4976,168 @@ async function fastSwapAtkDefPair(pairIdx) {
   doSubstitution(slot, inPlayerId, {isAtkDefSwap: true});
 }
 
-// ---- Config modal ----
-// Local working state so cancelling the modal doesn't touch the real match.
-let atkDefDraft = [];
+// ---- 3-step wizard: pista → rol → banco → añade la pareja ----
+// State kept alive across the 3 steps. Cleared on close/cancel/complete.
+let atkDefWizard = null; // { courtPlayerId, courtRole, benchPlayerId }
 
 function openAtkDefModal() {
-  // Copy current pairs into a working draft (or start with 1 empty row).
-  const existing = state.match.attackDefensePairs || [];
-  atkDefDraft = existing.length
-    ? existing.map(p => ({...p}))
-    : [{attackerId: null, defenderId: null}];
-  renderAtkDefConfig();
+  if (!state.match) return;
+  if ((state.match.attackDefensePairs || []).length >= MAX_ATKDEF_PAIRS) {
+    alert(`Ya tienes ${MAX_ATKDEF_PAIRS} parejas activas (el máximo). Desactiva alguna antes de añadir otra.`);
+    return;
+  }
+  atkDefWizard = { courtPlayerId: null, courtRole: null, benchPlayerId: null };
+  showAtkDefStep('court');
   document.getElementById('atkDefModal').style.display = 'flex';
 }
 function closeAtkDefModal() {
-  atkDefDraft = [];
+  atkDefWizard = null;
   document.getElementById('atkDefModal').style.display = 'none';
 }
 
-// Render one row per pair, each with two selectors + a delete button.
-// The dropdowns show ALL eligible players (roster minus expelled), tagged
-// with whether they're on court or on the bench, so Toni can pair anyone.
-function renderAtkDefConfig() {
-  const container = document.getElementById('atkDefPairsConfig');
-  const eligible = state.roster.filter(p => !(state.match.expelledPlayers || []).includes(p.id));
-  // Build option HTML once, we'll reuse it in every dropdown.
-  const optionHtml = (selectedId) => {
-    return `<option value="">— Elige —</option>` + eligible.map(p => {
-      const onCourt = state.match.onCourt.includes(p.id);
-      const tag = onCourt ? '🟢 pista' : '⚪ banco';
-      return `<option value="${p.id}" ${selectedId === p.id ? 'selected' : ''}>${p.number ?? '·'} · ${escapeHtml(displayName(p))} — ${tag}</option>`;
-    }).join('');
-  };
-
-  container.innerHTML = atkDefDraft.map((pair, i) => `
-    <div class="panel" style="padding:10px; margin-bottom:8px; background:#fff7ed; border:1px solid #fed7aa;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-        <div style="font-weight:700; color:#9a3412;">Pareja ${i + 1}</div>
-        <button class="btn btn-ghost btn-tiny" data-atkdef-del="${i}" title="Quitar esta pareja">✕</button>
-      </div>
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-        <div>
-          <label style="display:block; font-size:10px; color:#5b6776; margin-bottom:4px;">⚔️ ATACANTE</label>
-          <select class="form-input" data-atkdef-att="${i}">${optionHtml(pair.attackerId)}</select>
-        </div>
-        <div>
-          <label style="display:block; font-size:10px; color:#5b6776; margin-bottom:4px;">🛡️ DEFENSOR</label>
-          <select class="form-input" data-atkdef-def="${i}">${optionHtml(pair.defenderId)}</select>
-        </div>
-      </div>
-    </div>
-  `).join('');
-
-  // Wire selectors and delete buttons
-  container.querySelectorAll('[data-atkdef-att]').forEach(sel => {
-    sel.addEventListener('change', e => {
-      const i = parseInt(e.target.dataset.atkdefAtt, 10);
-      atkDefDraft[i].attackerId = e.target.value || null;
-    });
+// Show one step, hide the rest. Called every time we advance/back.
+function showAtkDefStep(step) {
+  ['atkDefStepCourt', 'atkDefStepRole', 'atkDefStepBench'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
   });
-  container.querySelectorAll('[data-atkdef-def]').forEach(sel => {
-    sel.addEventListener('change', e => {
-      const i = parseInt(e.target.dataset.atkdefDef, 10);
-      atkDefDraft[i].defenderId = e.target.value || null;
-    });
-  });
-  container.querySelectorAll('[data-atkdef-del]').forEach(b => {
-    b.addEventListener('click', e => {
-      const i = parseInt(e.currentTarget.dataset.atkdefDel, 10);
-      atkDefDraft.splice(i, 1);
-      if (atkDefDraft.length === 0) atkDefDraft.push({attackerId: null, defenderId: null});
-      renderAtkDefConfig();
-    });
-  });
+  const target = document.getElementById('atkDefStep' + step[0].toUpperCase() + step.slice(1));
+  if (target) target.style.display = '';
 
-  // Enable/disable "+ Añadir pareja" — max 2
-  const addBtn = document.getElementById('atkDefAddPairBtn');
-  if (addBtn) {
-    if (atkDefDraft.length >= 2) {
-      addBtn.disabled = true;
-      addBtn.style.opacity = '0.5';
-      addBtn.textContent = 'Máx 2 parejas';
-    } else {
-      addBtn.disabled = false;
-      addBtn.style.opacity = '';
-      addBtn.textContent = '+ Añadir pareja';
-    }
-  }
+  if (step === 'court') renderAtkDefCourtStep();
+  else if (step === 'role') renderAtkDefRoleStep();
+  else if (step === 'bench') renderAtkDefBenchStep();
 }
 
-// Validate the draft and activate the mode. Rules:
-//  - Each pair must have both attacker and defender selected, and distinct.
-//  - No player can be in more than one pair.
-//  - For each pair, exactly one of the two must currently be on court
-//    (otherwise fast-swap is impossible).
-async function submitAtkDefConfig() {
-  // Drop pairs left half-empty
-  const pairs = atkDefDraft.filter(p => p.attackerId && p.defenderId);
-  if (pairs.length === 0) {
-    alert('Añade al menos una pareja con atacante y defensor.');
+// STEP 1: players on court, in slot order (GK, Cierre, Ala, Ala, Pívot).
+// Excludes anyone who is already part of another pair (a player can't be in
+// two pairs at once).
+function renderAtkDefCourtStep() {
+  const list = document.getElementById('atkDefCourtList');
+  const inUseIds = new Set();
+  (state.match.attackDefensePairs || []).forEach(p => {
+    inUseIds.add(p.attackerId);
+    inUseIds.add(p.defenderId);
+  });
+  // Slot order — keep positional info even though we don't render the slot #.
+  const cards = state.match.onCourt.map((pid, slot) => {
+    if (!pid) return '';
+    const p = getPlayer(pid);
+    if (!p) return '';
+    const taken = inUseIds.has(pid);
+    const gkCls = slot === 0 ? ' gk' : '';
+    if (taken) {
+      // Grey out already-paired players so it's clear why they can't be picked
+      return `<div class="player-card${gkCls}" style="opacity:0.4; cursor:not-allowed;" title="Ya está en otra pareja">
+        <div class="player-num">${p.number ?? '·'}</div>
+        <div class="player-name-card">${escapeHtml(displayName(p))}</div>
+        <div style="font-size:9px; color:#94a3b8; margin-top:2px;">EN PAREJA</div>
+      </div>`;
+    }
+    return `<button class="player-card${gkCls}" data-atkdef-court="${pid}">
+      <div class="player-num">${p.number ?? '·'}</div>
+      <div class="player-name-card">${escapeHtml(displayName(p))}</div>
+    </button>`;
+  }).join('');
+  list.innerHTML = cards || '<div style="grid-column:1/-1; padding:20px; text-align:center; color:#5b6776;">Nadie en pista disponible.</div>';
+  list.querySelectorAll('[data-atkdef-court]').forEach(b => {
+    b.addEventListener('click', () => {
+      atkDefWizard.courtPlayerId = b.dataset.atkdefCourt;
+      showAtkDefStep('role');
+    });
+  });
+}
+
+// STEP 2: role picker with a hint reminding who was just picked
+function renderAtkDefRoleStep() {
+  const hint = document.getElementById('atkDefRoleHint');
+  const p = getPlayer(atkDefWizard.courtPlayerId);
+  hint.innerHTML = p
+    ? `Jugador de pista: <b>${escapeHtml(displayName(p))}</b> (#${p.number ?? '·'})`
+    : '';
+}
+
+// STEP 3: bench pickers (convocados + attending + not expelled + not already
+// in a pair). Ordered by shirt number so Toni can find them fast.
+function renderAtkDefBenchStep() {
+  const hint = document.getElementById('atkDefBenchHint');
+  const list = document.getElementById('atkDefBenchList');
+  const p = getPlayer(atkDefWizard.courtPlayerId);
+  const wantedRole = atkDefWizard.courtRole === 'attacker' ? 'defensor' : 'atacante';
+  const wantedIcon = atkDefWizard.courtRole === 'attacker' ? '🛡️' : '⚔️';
+  hint.innerHTML = p
+    ? `<b>${escapeHtml(displayName(p))}</b> (#${p.number ?? '·'}) actúa de <b>${atkDefWizard.courtRole === 'attacker' ? '⚔️ atacante' : '🛡️ defensor'}</b>. Elige compañero del banco (${wantedIcon} <b>${wantedRole}</b>):`
+    : '';
+
+  const onCourtIds = new Set(state.match.onCourt.filter(Boolean));
+  const expelled = new Set(state.match.expelledPlayers || []);
+  const inUseIds = new Set();
+  (state.match.attackDefensePairs || []).forEach(pp => {
+    inUseIds.add(pp.attackerId);
+    inUseIds.add(pp.defenderId);
+  });
+  const convokedSet = getConvokedPlayerIds(); // Set or null
+
+  const benchPlayers = state.roster
+    .filter(pl => !onCourtIds.has(pl.id))       // not on court
+    .filter(pl => !expelled.has(pl.id))         // not sent off
+    .filter(pl => !inUseIds.has(pl.id))         // not in another pair
+    .filter(pl => convokedSet ? convokedSet.has(pl.id) : true)  // convoked+attending
+    .sort((a, b) => (a.number || 99) - (b.number || 99));
+
+  if (benchPlayers.length === 0) {
+    list.innerHTML = '<div style="grid-column:1/-1; padding:20px; text-align:center; color:#5b6776;">No hay jugadores disponibles en el banquillo.</div>';
     return;
   }
-  const seen = new Set();
-  for (const p of pairs) {
-    if (p.attackerId === p.defenderId) {
-      alert('El atacante y el defensor de una pareja deben ser jugadores distintos.');
-      return;
-    }
-    if (seen.has(p.attackerId) || seen.has(p.defenderId)) {
-      alert('Un jugador no puede estar en dos parejas a la vez.');
-      return;
-    }
-    seen.add(p.attackerId); seen.add(p.defenderId);
-    // Position check
-    const attOnCourt = state.match.onCourt.includes(p.attackerId);
-    const defOnCourt = state.match.onCourt.includes(p.defenderId);
-    if (attOnCourt === defOnCourt) {
-      const att = getPlayer(p.attackerId);
-      const def = getPlayer(p.defenderId);
-      alert(`En la pareja ${displayName(att)} / ${displayName(def)}: uno debe estar en pista y el otro en el banquillo. Ajusta los cambios y vuelve a activar el modo.`);
-      return;
-    }
-  }
-  closeAtkDefModal();
-  await activateAtkDef(pairs);
+  list.innerHTML = benchPlayers.map(pl =>
+    `<button class="player-card" data-atkdef-bench="${pl.id}" style="border:2px dashed #a855f7; background:#faf5ff;">
+      <div class="player-num">${pl.number ?? '·'}</div>
+      <div class="player-name-card">${escapeHtml(displayName(pl))}</div>
+    </button>`
+  ).join('');
+  list.querySelectorAll('[data-atkdef-bench]').forEach(b => {
+    b.addEventListener('click', () => {
+      atkDefWizard.benchPlayerId = b.dataset.atkdefBench;
+      finishAtkDefWizard();
+    });
+  });
 }
 
-// Toggle the AtqDef button behaviour: activate opens config, active button
-// asks to deactivate.
+// Complete the wizard: build the pair object with the correct attacker/defender
+// assignment based on which role the court player took, then add it.
+async function finishAtkDefWizard() {
+  if (!atkDefWizard || !atkDefWizard.courtPlayerId || !atkDefWizard.courtRole || !atkDefWizard.benchPlayerId) return;
+  const w = atkDefWizard;
+  const pair = w.courtRole === 'attacker'
+    ? { attackerId: w.courtPlayerId, defenderId: w.benchPlayerId }
+    : { attackerId: w.benchPlayerId, defenderId: w.courtPlayerId };
+  closeAtkDefModal();
+  await addAtkDefPair(pair);
+}
+
+// Append a new pair to the match and activate the mode if it wasn't already.
+// Timestamp with the current absolute match time so the per-pair counter
+// starts fresh at 00:00.
+async function addAtkDefPair(pair) {
+  if (!state.match) return;
+  state.match.attackDefensePairs = state.match.attackDefensePairs || [];
+  if (state.match.attackDefensePairs.length >= MAX_ATKDEF_PAIRS) {
+    alert(`Máximo ${MAX_ATKDEF_PAIRS} parejas simultáneas.`);
+    return;
+  }
+  state.match.attackDefensePairs.push({
+    ...pair,
+    activatedAt: absoluteMatchTime(),
+  });
+  state.match.attackDefenseActive = true;
+  await saveCurrentMatch();
+  renderAll();
+}
+
 async function onAtkDefButtonClick() {
   if (!state.match) return;
   if (state.match.attackDefenseActive) {
-    if (confirm('¿Desactivar el modo Ataque/Defensa? Las parejas se descartarán.')) {
+    if (confirm('¿Desactivar el modo Ataque/Defensa? Todas las parejas se descartarán.')) {
       await deactivateAtkDef();
     }
   } else {
@@ -6657,7 +6733,12 @@ function renderEventLog() {
 }
 
 // Build one <tr> for the compact event log table (Match view).
-function buildEventTableRow(evt) {
+function buildEventTableRow(evt, opts) {
+  // opts: { matchEventsOverride?, readOnly? } — both optional. Used to reuse
+  // this builder from the History view (readOnly, and events come from a
+  // finished match instead of the live one).
+  const matchEvents = (opts && opts.matchEventsOverride) || state.match?.events || [];
+  const readOnly = !!(opts && opts.readOnly);
   const player = evt.playerId ? getPlayer(evt.playerId) : null;
   const periodLabel = evt.period === 1 ? '1ªP' : '2ªP';
 
@@ -6665,7 +6746,7 @@ function buildEventTableRow(evt) {
   // provoker/committer, one for the shooter/GK with the result. Both rows
   // share the same evt.id so ✏️ and ↩ still act on the whole penalty.
   if (evt.type === 'penalty') {
-    return buildPenaltyRows(evt);
+    return buildPenaltyRows(evt, {readOnly});
   }
 
   // Label / player rendering — same logic used by the old card renderer but
@@ -6681,7 +6762,7 @@ function buildEventTableRow(evt) {
     else if (evt.result === 'parada') label = '🧤 Parada';
     else label = 'Oc. rival (fuera)';
   } else if (evt.type === 'yellow') {
-    const yellowsUpTo = state.match.events.filter(e =>
+    const yellowsUpTo = matchEvents.filter(e =>
       e.type === 'yellow' && e.playerId === evt.playerId &&
       (e.time < evt.time || (e.time === evt.time && e.id <= evt.id))
     ).length;
@@ -6718,15 +6799,24 @@ function buildEventTableRow(evt) {
   // shows the main actor. Penalties never reach here (handled above).
   const playerCell = isSub ? '' : (player ? escapeHtml(displayName(player)) : '');
 
+  // Time cell: interactive edit-time in the live log, plain read-only in the
+  // history log.
+  const timeCellContent = readOnly
+    ? `${periodLabel} ${formatCountdown(evt.time)}`
+    : `<span data-evt-time="${evt.id}" style="cursor:pointer; text-decoration:underline dotted;" title="Tocar para corregir el tiempo">${periodLabel} ${formatCountdown(evt.time)}</span>`;
+  const actionsCell = readOnly
+    ? ''
+    : `<td class="col-actions">
+      <button class="event-edit" data-id="${evt.id}" title="Editar">✏️</button>
+      <button class="event-undo del" data-id="${evt.id}" title="Deshacer">↩</button>
+    </td>`;
+
   return `<tr class="${isSub ? 'sub-row' : ''}">
-    <td class="col-time"><span data-evt-time="${evt.id}" style="cursor:pointer; text-decoration:underline dotted;" title="Tocar para corregir el tiempo">${periodLabel} ${formatCountdown(evt.time)}</span></td>
+    <td class="col-time">${timeCellContent}</td>
     <td class="col-type">${label}</td>
     <td class="col-player">${playerCell}</td>
     <td class="col-marks">${marks.join(' ')}</td>
-    <td class="col-actions">
-      <button class="event-edit" data-id="${evt.id}" title="Editar">✏️</button>
-      <button class="event-undo del" data-id="${evt.id}" title="Deshacer">↩</button>
-    </td>
+    ${actionsCell}
   </tr>`;
 }
 
@@ -6736,10 +6826,16 @@ function buildEventTableRow(evt) {
 // Both rows carry the same evt.id so editing or undoing either one operates
 // on the whole penalty event (data model stays single). Second row gets a
 // subtle top border to visually pair them.
-function buildPenaltyRows(evt) {
+function buildPenaltyRows(evt, opts) {
+  const readOnly = !!(opts && opts.readOnly);
   const periodLabel = evt.period === 1 ? '1ªP' : '2ªP';
-  const timeCell = `<td class="col-time"><span data-evt-time="${evt.id}" style="cursor:pointer; text-decoration:underline dotted;" title="Tocar para corregir el tiempo">${periodLabel} ${formatCountdown(evt.time)}</span></td>`;
-  const actionsCell = `<td class="col-actions">
+  const timeCellContent = readOnly
+    ? `${periodLabel} ${formatCountdown(evt.time)}`
+    : `<span data-evt-time="${evt.id}" style="cursor:pointer; text-decoration:underline dotted;" title="Tocar para corregir el tiempo">${periodLabel} ${formatCountdown(evt.time)}</span>`;
+  const timeCell = `<td class="col-time">${timeCellContent}</td>`;
+  const actionsCell = readOnly
+    ? ''
+    : `<td class="col-actions">
     <button class="event-edit" data-id="${evt.id}" title="Editar">✏️</button>
     <button class="event-undo del" data-id="${evt.id}" title="Deshacer">↩</button>
   </td>`;
@@ -6791,15 +6887,18 @@ function buildPenaltyRows(evt) {
   </tr>`;
   // Second row: reuse same evt.id in the buttons (so ✏️/↩ act on the whole
   // penalty). Time cell is intentionally blank because it's the same instant.
+  const row2ActionsCell = readOnly
+    ? ''
+    : `<td class="col-actions">
+      <button class="event-edit" data-id="${evt.id}" title="Editar el penalti completo">✏️</button>
+      <button class="event-undo del" data-id="${evt.id}" title="Deshacer el penalti completo">↩</button>
+    </td>`;
   const row2 = `<tr class="pen-row pen-row-2" style="border-top:1px dashed #e2e8f0;">
     <td class="col-time"></td>
     <td class="col-type">${row2Label}</td>
     <td class="col-player">${nameOf(row2PlayerId)}</td>
     <td class="col-marks"></td>
-    <td class="col-actions">
-      <button class="event-edit" data-id="${evt.id}" title="Editar el penalti completo">✏️</button>
-      <button class="event-undo del" data-id="${evt.id}" title="Deshacer el penalti completo">↩</button>
-    </td>
+    ${row2ActionsCell}
   </tr>`;
   return row1 + row2;
 }
@@ -8156,6 +8255,7 @@ function renderHistory() {
           <div style="color:#5b6776; font-size:13px;">Resultado: <strong>${m.scoreFor} - ${m.scoreAgainst}</strong> · ${m.events.length} eventos</div>
         </div>
         <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+          <button class="btn btn-ghost" data-viewlog="${m.id}" title="Ver el log del partido">📋 Ver log</button>
           <button class="btn btn-primary" data-chronicle="${m.id}" title="Preparar texto de crónica para WhatsApp">📱 Crónica</button>
           <button class="btn btn-ghost" data-export="${m.id}">📥 Exportar</button>
           <button class="btn btn-danger" data-del="${m.id}">Eliminar</button>
@@ -8191,6 +8291,12 @@ function renderHistory() {
     b.addEventListener('click', e => {
       const mid = e.currentTarget.dataset.chronicle;
       openChronicleModal(mid);
+    });
+  });
+  list.querySelectorAll('[data-viewlog]').forEach(b => {
+    b.addEventListener('click', e => {
+      const mid = e.currentTarget.dataset.viewlog;
+      openHistoryLogModal(mid);
     });
   });
 }
@@ -8233,6 +8339,94 @@ async function computeChronicleGoals(match) {
     .filter(r => r.player)
     .sort((a, b) => (b.count - a.count) || ((a.player.number || 99) - (b.player.number || 99)));
   return { scorers: toRows(scorerCount), conceders: toRows(concederCount) };
+}
+
+// ============================================================
+// HISTORY EVENT LOG (read-only browse of a finished match)
+// ============================================================
+// Toni's use case: after a match, quickly find the exact goal timestamps so
+// he can cut clips and share on socials. The modal shows the same table as
+// the live log with quick-filter chips (goals / cards / penalties / subs).
+let historyLogMatchId = null;
+let historyLogEvents = [];
+let historyLogFilter = 'all';
+
+async function openHistoryLogModal(matchId) {
+  const match = state.history.find(m => m.id === matchId);
+  if (!match) return;
+  historyLogMatchId = matchId;
+  historyLogFilter = 'all';
+  // Reset the chip UI to "All"
+  document.querySelectorAll('#historyLogFilters .filter-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.histfilter === 'all');
+  });
+  // Load events for this match (uses same helper as stats — will hit cache
+  // on the second open of the same match).
+  const data = await loadMatchData(matchId, false);
+  historyLogEvents = [...(data.events || [])];
+  // Title with date + rival + final score for context
+  const date = new Date(match.date).toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit', year:'numeric'});
+  const rival = match.opponent ? ` · vs ${match.opponent}` : '';
+  const score = ` · ${match.scoreFor}-${match.scoreAgainst}`;
+  document.getElementById('historyLogTitle').textContent = `📋 Log del partido — ${date}${rival}${score}`;
+  renderHistoryLogTable();
+  document.getElementById('historyLogModal').style.display = 'flex';
+}
+function closeHistoryLogModal() {
+  historyLogMatchId = null;
+  historyLogEvents = [];
+  document.getElementById('historyLogModal').style.display = 'none';
+}
+
+// Filter events by the active chip.
+function historyLogFilterFn(evt) {
+  if (historyLogFilter === 'all') return true;
+  if (historyLogFilter === 'goals') {
+    // Our goals + rival goals + penalties that were converted (either side)
+    if (evt.type === 'chance' && evt.result === 'gol') return true;
+    if (evt.type === 'opp_chance' && evt.result === 'gol') return true;
+    if (evt.type === 'penalty' && evt.result === 'gol') return true;
+    return false;
+  }
+  if (historyLogFilter === 'chances') {
+    return evt.type === 'chance' || evt.type === 'opp_chance';
+  }
+  if (historyLogFilter === 'penalties') return evt.type === 'penalty';
+  if (historyLogFilter === 'cards') return evt.type === 'yellow' || evt.type === 'red';
+  if (historyLogFilter === 'subs') return evt.type === 'sub';
+  return true;
+}
+
+function renderHistoryLogTable() {
+  const container = document.getElementById('historyLogContainer');
+  const events = [...historyLogEvents]
+    .filter(historyLogFilterFn)
+    // Chronological order — same sort key as the live log so what Toni sees
+    // matches what he'd see mid-match.
+    .sort((a, b) => (a.period - b.period) || (a.time - b.time) || (a.id > b.id ? 1 : -1));
+
+  if (events.length === 0) {
+    container.innerHTML = '<div style="padding:30px; text-align:center; color:#5b6776;">Sin eventos para este filtro.</div>';
+    return;
+  }
+  // Same table structure as the live event log, but read-only (no ✏️/↩).
+  let html = `
+    <table class="event-log-table">
+      <thead>
+        <tr>
+          <th class="col-time">Min</th>
+          <th class="col-type">Acción</th>
+          <th class="col-player">Jugador</th>
+          <th class="col-marks">Marcas</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+  html += events.map(evt =>
+    buildEventTableRow(evt, {matchEventsOverride: historyLogEvents, readOnly: true})
+  ).join('');
+  html += '</tbody></table>';
+  container.innerHTML = html;
 }
 
 // Build the plain-text chronicle for WhatsApp.
@@ -9805,18 +9999,23 @@ document.querySelectorAll('#penStepResult [data-penresult]').forEach(b => {
 // Live stats modal (in-match team/player breakdown with 1P/2P/Total filter)
 document.getElementById('liveStatsBtn').addEventListener('click', openLiveStatsModal);
 
-// AtqDef mode: topbar toggle + config modal
+// AtqDef mode: topbar toggle + 3-step wizard
 document.getElementById('atkDefBtn').addEventListener('click', onAtkDefButtonClick);
 document.getElementById('closeAtkDefModal').addEventListener('click', closeAtkDefModal);
 document.getElementById('atkDefModal').addEventListener('click', e => {
   if (e.target.id === 'atkDefModal') closeAtkDefModal();
 });
-document.getElementById('atkDefAddPairBtn').addEventListener('click', () => {
-  if (atkDefDraft.length >= 2) return;
-  atkDefDraft.push({attackerId: null, defenderId: null});
-  renderAtkDefConfig();
+// Step 2 (role) — user picks attacker/defender for the on-court player
+document.querySelectorAll('#atkDefStepRole [data-atkdef-role]').forEach(b => {
+  b.addEventListener('click', () => {
+    if (!atkDefWizard) return;
+    atkDefWizard.courtRole = b.dataset.atkdefRole; // 'attacker' | 'defender'
+    showAtkDefStep('bench');
+  });
 });
-document.getElementById('atkDefActivateBtn').addEventListener('click', submitAtkDefConfig);
+// Back buttons — each rewinds one step
+document.getElementById('atkDefBackRoleBtn').addEventListener('click', () => showAtkDefStep('court'));
+document.getElementById('atkDefBackBenchBtn').addEventListener('click', () => showAtkDefStep('role'));
 document.getElementById('closeLiveStatsModal').addEventListener('click', closeLiveStatsModal);
 document.getElementById('liveStatsModal').addEventListener('click', e => {
   if (e.target.id === 'liveStatsModal') closeLiveStatsModal();
@@ -9842,6 +10041,21 @@ document.getElementById('chronicleModal').addEventListener('click', e => {
 document.getElementById('chronicleSaveMvpBtn').addEventListener('click', saveChronicleMvp);
 document.getElementById('chronicleRefreshBtn').addEventListener('click', refreshChronicleText);
 document.getElementById('chronicleCopyBtn').addEventListener('click', copyChronicleToClipboard);
+
+// History event log modal (read-only browse of a finished match)
+document.getElementById('closeHistoryLogModal').addEventListener('click', closeHistoryLogModal);
+document.getElementById('historyLogModal').addEventListener('click', e => {
+  if (e.target.id === 'historyLogModal') closeHistoryLogModal();
+});
+// Filter chips: swap active class + re-render
+document.querySelectorAll('#historyLogFilters .filter-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('#historyLogFilters .filter-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    historyLogFilter = chip.dataset.histfilter;
+    renderHistoryLogTable();
+  });
+});
 
 // Assist → scorer picker modal
 document.getElementById('closeAssistGoalModal').addEventListener('click', closeAssistGoalModal);
