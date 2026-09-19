@@ -619,6 +619,47 @@
     background: #fef2f2;
     border-bottom: 1px solid #fecaca;
   }
+  /* Rival cards banner — orange tone so it doesn't clash with the red-ish
+     sanctions banner. */
+  #oppCardsBanner {
+    background: #fff7ed;
+    border-bottom: 1px solid #fed7aa;
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  #oppCardsBanner .opp-cards-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  #oppCardsBanner .opp-cards-label {
+    font-weight: 700;
+    color: #9a3412;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 11px;
+  }
+  #oppCardsBanner .opp-cards-pills {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  #oppCardsBanner .opp-card-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: #fff;
+    border: 1px solid #fed7aa;
+    border-radius: 999px;
+    color: #334155;
+  }
+  #oppCardsBanner .opp-card-pill.expelled {
+    background: #7f1d1d;
+    color: #fecaca;
+    border-color: #7f1d1d;
+  }
   .card-type-btn {
     flex: 1;
     padding: 14px;
@@ -899,6 +940,20 @@
   .action-btn[data-type="assist_nogoal"] { border-color: #22c55e; }
   .action-btn[data-type="recovery"] { border-color: #0ea5e9; }
   .action-btn[data-type="yellow"] { border-color: #eab308; }
+  /* Rival cards: bookkeeping-only. Distinct look (dashed border) so Toni
+     never confuses them with our team's own yellow/red buttons. */
+  .action-btn.opp-card-yellow {
+    border-color: #eab308;
+    border-style: dashed;
+    background: #fefce8;
+  }
+  .action-btn.opp-card-red {
+    border-color: #dc2626;
+    border-style: dashed;
+    background: #fef2f2;
+  }
+  .action-btn.opp-card-yellow:active { background: #fef08a; }
+  .action-btn.opp-card-red:active { background: #fecaca; }
   .action-btn[data-type="red"] { border-color: #dc2626; }
   .action-btn[data-type="foul"] { border-color: #f97316; }
   .action-btn[data-type="loss"] { border-color: #f43f5e; }
@@ -1728,6 +1783,52 @@
   .top-name { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .top-val { font-weight: 800; font-variant-numeric: tabular-nums; }
   .top-row.quintet .quintet-players { flex: 1; font-size: 11px; line-height: 1.3; font-weight: 600; }
+
+  /* ===== STATS x JUGADOR ===== */
+  .ps-panel { padding: 14px 16px; }
+  .ps-header {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 16px;
+    padding-bottom: 12px; border-bottom: 1px solid #f1f5f9;
+  }
+  .ps-header-num {
+    background: #1e293b; color: #fff; width: 56px; height: 56px;
+    border-radius: 12px; display: flex; align-items: center; justify-content: center;
+    font-size: 26px; font-weight: 800; flex-shrink: 0;
+  }
+  .ps-header-info { flex: 1; min-width: 0; }
+  .ps-header-name { font-size: 20px; font-weight: 800; color: #0f172a; }
+  .ps-header-meta { display: flex; gap: 8px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+  .ps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .ps-block {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px;
+  }
+  .ps-block h4 { margin: 0 0 10px; font-size: 13px; font-weight: 800; color: #334155;
+    padding-bottom: 6px; border-bottom: 1px solid #f1f5f9;
+  }
+  .ps-block-general h4 { color: #1e40af; }
+  .ps-block-pos h4 { color: #15803d; }
+  .ps-block-neg h4 { color: #b91c1c; }
+  .ps-block-pen h4 { color: #78350f; }
+  .ps-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px; align-items: center;
+    padding: 6px 0; border-bottom: 1px dashed #f1f5f9; font-size: 13px;
+  }
+  .ps-row:last-child { border-bottom: none; }
+  .ps-label { color: #334155; font-weight: 600; }
+  .ps-value { font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
+  .ps-rank {
+    font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+    background: #f1f5f9; color: #64748b; white-space: nowrap;
+  }
+  .ps-rank.rank-top { background: #fbbf24; color: #78350f; }
+  .ps-rank.rank-good { background: #dcfce7; color: #15803d; }
+  .ps-rank.rank-bad { background: #fee2e2; color: #991b1b; }
   .match-picker-item .mp-active-badge {
     background: #16a34a;
     color: #fff;
@@ -2063,6 +2164,16 @@
         </span>
         <span class="navtab-label">Top Stats</span>
       </button>
+      <button class="navtab" data-view="playerStats">
+        <span class="navtab-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="7" r="3"/>
+            <path d="M6 21c0-3.3 2.7-6 6-6s6 2.7 6 6"/>
+            <path d="M17 12l2 2 3-3"/>
+          </svg>
+        </span>
+        <span class="navtab-label">Stats x Jugador</span>
+      </button>
       <button class="navtab" data-view="roster">
         <span class="navtab-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -2203,6 +2314,10 @@
       <!-- Sanctions banner (active expulsions / inferiority countdown) -->
       <div id="sanctionsBanner" style="display:none;"></div>
 
+      <!-- Rival cards banner: yellow/red bookkeeping so Toni can see mid-match
+           who from the opponent side is on warning or expelled. -->
+      <div id="oppCardsBanner" style="display:none;"></div>
+
       <!-- Activity link banner -->
       <div id="matchActivityBanner" style="display:none; padding: 8px 12px; background:#f1f5f9; border-bottom:1px solid #dde3ea; font-size:13px; color:#334155;"></div>
 
@@ -2254,6 +2369,9 @@
               <!-- Row 7: Amarilla / Roja -->
               <button class="action-btn card-yellow" id="cardYellowBtn"><span class="action-icon">🟨</span><span class="action-label">Amarilla</span></button>
               <button class="action-btn card-red" id="cardRedBtn"><span class="action-icon">🟥</span><span class="action-label">Roja</span></button>
+              <!-- Row 8: Amarilla rival / Roja rival — book-keeping only, no team stats impact -->
+              <button class="action-btn opp-card-yellow" id="cardYellowRivalBtn"><span class="action-icon">🟨</span><span class="action-label">Rival</span></button>
+              <button class="action-btn opp-card-red" id="cardRedRivalBtn"><span class="action-icon">🟥</span><span class="action-label">Rival</span></button>
             </div>
           </div>
         </div>
@@ -2409,6 +2527,75 @@
 
   <div style="padding: 0 16px 16px;">
     <div id="topStatsContent"></div>
+  </div>
+</div>
+
+<!-- ===== STATS x JUGADOR VIEW (per-player detail with team ranking) ===== -->
+<!-- Toni's ask: a "show-to-the-player" view. Same numbers as Estadísticas    -->
+<!-- but scoped to a single player, plus "3º de 12" ranks so he sees how he  -->
+<!-- compares to the rest of the team. Filters mirror Top Stats.             -->
+<div class="view" id="view-playerStats">
+  <div class="view-header">
+    <span class="view-header-icon">👤</span>
+    <span class="view-header-title">Stats x Jugador</span>
+    <span class="view-header-sub" id="playerStatsHeaderSub">—</span>
+  </div>
+
+  <!-- Filters (shared with Top Stats) -->
+  <div class="stats-filters">
+    <div class="stats-filter-group">
+      <label>Jugador</label>
+      <select id="playerStatsPicker" class="form-input" style="min-width:220px;"></select>
+    </div>
+    <div class="stats-filter-group">
+      <label>Competición</label>
+      <div class="chip-row" id="psFilterCompetition">
+        <button class="filter-chip active" data-comp="">Todas</button>
+        <button class="filter-chip" data-comp="Liga">Liga</button>
+        <button class="filter-chip" data-comp="Copa">Copa</button>
+        <button class="filter-chip" data-comp="Amistoso">Amistoso</button>
+      </div>
+    </div>
+    <div class="stats-filter-group">
+      <label>Local / Visitante</label>
+      <div class="chip-row" id="psFilterVenue">
+        <button class="filter-chip active" data-venue="">Todos</button>
+        <button class="filter-chip" data-venue="Local">Local</button>
+        <button class="filter-chip" data-venue="Visitante">Visitante</button>
+      </div>
+    </div>
+    <div class="stats-filter-group" id="psMatchGroup">
+      <label>Partidos</label>
+      <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+        <button class="filter-chip" id="psSelectAll">Todos</button>
+        <button class="filter-chip" id="psSelectNone">Ninguno</button>
+        <button class="filter-chip" id="psSelectActive">Solo el activo</button>
+        <button class="btn btn-ghost btn-tiny" id="psToggleMatchPicker" style="display:flex; align-items:center; gap:4px;">
+          <span id="psMatchSummary">0 seleccionados</span> ▾
+        </button>
+      </div>
+      <div class="match-picker" id="psMatchPicker" style="display:none;"></div>
+    </div>
+    <div class="stats-filter-group">
+      <label>Situación</label>
+      <div class="chip-row" id="psFilterJuego5">
+        <button class="filter-chip active" data-j5="all">Todo</button>
+        <button class="filter-chip" data-j5="j5for">CNS de 5</button>
+        <button class="filter-chip" data-j5="j5against">Rival de 5</button>
+      </div>
+    </div>
+    <div class="stats-filter-group">
+      <label>Cálculo</label>
+      <div class="chip-row" id="psFilterCalc">
+        <button class="filter-chip active" data-calc="total">Totales</button>
+        <button class="filter-chip" data-calc="perMatch">Por partido</button>
+        <button class="filter-chip" data-calc="perTime">Por minuto</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding: 0 16px 16px;">
+    <div id="playerStatsContent"></div>
   </div>
 </div>
 
@@ -3054,6 +3241,40 @@
     <div style="display:flex; gap:8px; margin-top:12px;">
       <button class="keypad-btn cancel" id="keypadCancel" style="flex:1;">Cancelar</button>
       <button class="keypad-btn confirm" id="keypadConfirm" style="flex:2;">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== OPPONENT CARD MODAL (rival card bookkeeping) ===== -->
+<!-- Toni's ask: track rival yellows/reds so he can see mid-match who's on   -->
+<!-- warning or expelled. Does NOT affect any team stats — it's just written -->
+<!-- to the event log with type 'opp_card' + oppNumber, and shown in a small -->
+<!-- banner near the bench.                                                   -->
+<div class="modal-backdrop" id="oppCardModal" style="display:none;">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-title">
+      <span id="oppCardTitle">Tarjeta rival</span>
+      <button class="btn btn-ghost" id="closeOppCard">✕</button>
+    </div>
+    <div class="keypad-hint">Dorsal del jugador rival</div>
+    <div class="keypad-display" id="oppCardDisplay">--</div>
+    <div class="keypad-grid">
+      <button class="keypad-btn" data-oppkey="1">1</button>
+      <button class="keypad-btn" data-oppkey="2">2</button>
+      <button class="keypad-btn" data-oppkey="3">3</button>
+      <button class="keypad-btn" data-oppkey="4">4</button>
+      <button class="keypad-btn" data-oppkey="5">5</button>
+      <button class="keypad-btn" data-oppkey="6">6</button>
+      <button class="keypad-btn" data-oppkey="7">7</button>
+      <button class="keypad-btn" data-oppkey="8">8</button>
+      <button class="keypad-btn" data-oppkey="9">9</button>
+      <button class="keypad-btn action" data-oppkey="clear">Borrar</button>
+      <button class="keypad-btn" data-oppkey="0">0</button>
+      <button class="keypad-btn action" data-oppkey="back">←</button>
+    </div>
+    <div style="display:flex; gap:8px; margin-top:12px;">
+      <button class="keypad-btn cancel" id="oppCardCancel" style="flex:1;">Cancelar</button>
+      <button class="keypad-btn confirm" id="oppCardConfirm" style="flex:2;">Confirmar</button>
     </div>
   </div>
 </div>
@@ -3899,6 +4120,32 @@ function formatCountdown(elapsed) {
   return formatTime(remainingSeconds(elapsed));
 }
 
+// Render the rival cards banner: one pill per opponent dorsal with cards
+// received in this match. Expelled rivals (2Y or R) get a special badge so
+// Toni can spot them at a glance mid-match.
+function renderOppCardsBanner() {
+  const banner = document.getElementById('oppCardsBanner');
+  if (!banner) return;
+  const summary = computeOppCardsSummary();
+  if (summary.length === 0) {
+    banner.style.display = 'none';
+    banner.innerHTML = '';
+    return;
+  }
+  const pills = summary.map(s => {
+    const icons = '🟨'.repeat(s.yellow) + '🟥'.repeat(s.red);
+    const status = s.expelled ? ' <b style="color:#fecaca;">EXPULSADO</b>' : '';
+    return `<span class="opp-card-pill${s.expelled ? ' expelled' : ''}">
+      <b>#${s.dorsal}</b> ${icons}${status}
+    </span>`;
+  }).join('');
+  banner.style.display = 'block';
+  banner.innerHTML = `<div class="opp-cards-inner">
+    <span class="opp-cards-label">🟨 Tarjetas rival</span>
+    <div class="opp-cards-pills">${pills}</div>
+  </div>`;
+}
+
 // Render the active sanctions banner (inferiority countdown).
 function renderSanctionsBanner() {
   const banner = document.getElementById('sanctionsBanner');
@@ -4471,6 +4718,7 @@ function actionLabel(type) {
     duel_off_lost: '💪 Duelo ofensivo perdido',
     duel_def_won: '🛡️ Duelo defensivo ganado',
     duel_def_lost: '🛡️ Duelo defensivo perdido',
+    opp_card: 'Tarjeta rival',
   };
   return labels[type] || type;
 }
@@ -4718,6 +4966,102 @@ async function setJuego5(side) {
   }
   await saveCurrentMatch();
   renderAll();
+}
+
+// ============================================================
+// OPPONENT CARDS (rival yellow/red bookkeeping — no team stats impact)
+// ============================================================
+// Toni asked for this to keep track of which rival players are on warning
+// or expelled during a live match. Stored as events of type 'opp_card' with:
+//   - cardType: 'yellow' | 'red'
+//   - oppNumber: the shirt number the coach typed
+// The event log renders them like any other action but they are EXCLUDED
+// from every stats aggregator (they belong to the opponent, not us).
+
+let oppCardState = null; // { cardType, oppNumberStr }
+
+function openOppCardModal(cardType) {
+  if (!state.match) { alert('No hay partido activo.'); return; }
+  oppCardState = { cardType, oppNumberStr: '' };
+  const title = cardType === 'red' ? '🟥 Roja rival' : '🟨 Amarilla rival';
+  document.getElementById('oppCardTitle').textContent = title;
+  updateOppCardDisplay();
+  document.getElementById('oppCardModal').style.display = 'flex';
+}
+function closeOppCardModal() {
+  oppCardState = null;
+  document.getElementById('oppCardModal').style.display = 'none';
+}
+function updateOppCardDisplay() {
+  const el = document.getElementById('oppCardDisplay');
+  if (!el || !oppCardState) return;
+  el.textContent = oppCardState.oppNumberStr || '--';
+}
+function handleOppCardKey(k) {
+  if (!oppCardState) return;
+  if (k === 'clear') {
+    oppCardState.oppNumberStr = '';
+  } else if (k === 'back') {
+    oppCardState.oppNumberStr = oppCardState.oppNumberStr.slice(0, -1);
+  } else {
+    // Keep it 2 digits max — futsal shirt numbers are 1-99.
+    if (oppCardState.oppNumberStr.length < 2) {
+      oppCardState.oppNumberStr += k;
+    }
+  }
+  updateOppCardDisplay();
+}
+async function confirmOppCard() {
+  if (!oppCardState) return;
+  const num = parseInt(oppCardState.oppNumberStr, 10);
+  if (isNaN(num) || num < 1 || num > 99) {
+    alert('Introduce un dorsal válido (1-99).');
+    return;
+  }
+  const cardType = oppCardState.cardType;
+  closeOppCardModal();
+  const {time, period} = getEventTimeAndPeriod();
+  const evt = {
+    id: 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+    matchId: state.match.id,
+    type: 'opp_card',
+    playerId: null,          // no roster player — this is a rival
+    oppNumber: num,
+    cardType,                // 'yellow' | 'red'
+    time,
+    period,
+    onCourt: [...state.match.onCourt],
+    juego5For: !!state.match.juego5For,
+    juego5Against: !!state.match.juego5Against,
+    atkDef: !!state.match.attackDefenseActive,
+  };
+  state.match.events.push(evt);
+  await saveEvent(evt);
+  finishInsertMode();
+  renderAll();
+}
+
+// Summary of rival cards for the on-screen banner. Groups by dorsal so the
+// coach sees "#7: 🟨🟨🟥 (expulsado)" at a glance. Second yellow to the same
+// dorsal is treated as a de-facto expulsion for the display.
+function computeOppCardsSummary() {
+  if (!state.match) return [];
+  const byDorsal = {};
+  for (const e of state.match.events) {
+    if (e.type !== 'opp_card') continue;
+    const n = e.oppNumber;
+    if (!byDorsal[n]) byDorsal[n] = { yellow: 0, red: 0 };
+    if (e.cardType === 'yellow') byDorsal[n].yellow++;
+    else if (e.cardType === 'red') byDorsal[n].red++;
+  }
+  return Object.entries(byDorsal)
+    .map(([n, c]) => ({
+      dorsal: parseInt(n, 10),
+      yellow: c.yellow,
+      red: c.red,
+      expelled: c.red > 0 || c.yellow >= 2,
+    }))
+    .sort((a, b) => a.dorsal - b.dorsal);
 }
 
 // ============================================================
@@ -6769,6 +7113,21 @@ function buildEventTableRow(evt, opts) {
     label = yellowsUpTo >= 2 ? '🟨🟨 2ª amarilla (expulsión)' : '🟨 Amarilla';
   } else if (evt.type === 'red') {
     label = '🟥 Roja directa';
+  } else if (evt.type === 'opp_card') {
+    // Rival card — dorsal goes in the label. Second yellow to the same rival
+    // dorsal is flagged as (expulsión) too, mirroring how we handle our own.
+    const dorsal = evt.oppNumber ?? '?';
+    if (evt.cardType === 'red') {
+      label = `🟥 RIVAL #${dorsal} — Roja directa`;
+    } else {
+      const yellowsUpTo = matchEvents.filter(e =>
+        e.type === 'opp_card' && e.cardType === 'yellow' && e.oppNumber === evt.oppNumber &&
+        (e.time < evt.time || (e.time === evt.time && e.id <= evt.id))
+      ).length;
+      label = yellowsUpTo >= 2
+        ? `🟨🟨 RIVAL #${dorsal} — 2ª amarilla (expulsión)`
+        : `🟨 RIVAL #${dorsal} — Amarilla`;
+    }
   } else if (evt.type === 'sub') {
     isSub = true;
     const pIn = evt.playerId ? getPlayer(evt.playerId) : null;
@@ -6926,6 +7285,19 @@ function buildEventRow(evt) {
     label = yellowsUpTo >= 2 ? '🟨🟨 Segunda amarilla (expulsión)' : '🟨 Primera amarilla';
   } else if (evt.type === 'red') {
     label = '🟥 Roja directa';
+  } else if (evt.type === 'opp_card') {
+    const dorsal = evt.oppNumber ?? '?';
+    if (evt.cardType === 'red') {
+      label = `🟥 RIVAL #${dorsal} — Roja directa`;
+    } else {
+      const yellowsUpTo = state.match.events.filter(e =>
+        e.type === 'opp_card' && e.cardType === 'yellow' && e.oppNumber === evt.oppNumber &&
+        (e.time < evt.time || (e.time === evt.time && e.id <= evt.id))
+      ).length;
+      label = yellowsUpTo >= 2
+        ? `🟨🟨 RIVAL #${dorsal} — Segunda amarilla (expulsión)`
+        : `🟨 RIVAL #${dorsal} — Primera amarilla`;
+    }
   } else if (evt.type === 'sub') {
     // Substitution: show who came in / who went out
     const pIn = evt.playerId ? getPlayer(evt.playerId) : null;
@@ -8005,6 +8377,251 @@ async function renderTopStats() {
   }
 }
 
+// ============================================================
+// STATS x JUGADOR — per-player detail view with team ranking
+// ============================================================
+// A player-focused version of Estadísticas: shows the same numbers but for
+// ONE player only, with "3º de 12" style ranks next to each stat so Toni can
+// use it to show the player how they compare to the team.
+// Reuses statsFilters (competition/venue/matches/J5/calc). The picker starts
+// on the first roster player and remembers the selection across renders.
+let psSelectedPlayerId = null;
+
+async function renderPlayerStatsView() {
+  const subEl = document.getElementById('playerStatsHeaderSub');
+  const content = document.getElementById('playerStatsContent');
+  const picker = document.getElementById('playerStatsPicker');
+  if (!content || !picker) return;
+
+  // 1) Populate the picker with the current roster (sorted by shirt number).
+  //    Preserve the previous selection if that player still exists.
+  const sortedRoster = [...state.roster].sort((a, b) => (a.number || 99) - (b.number || 99));
+  if (sortedRoster.length === 0) {
+    picker.innerHTML = '<option value="">(sin jugadores)</option>';
+    if (subEl) subEl.textContent = 'Sin plantilla';
+    content.innerHTML = '<div class="panel"><div style="padding:20px; text-align:center; color:#5b6776;">Añade jugadores en la plantilla para ver estadísticas individuales.</div></div>';
+    return;
+  }
+  if (!psSelectedPlayerId || !sortedRoster.find(p => p.id === psSelectedPlayerId)) {
+    psSelectedPlayerId = sortedRoster[0].id;
+  }
+  picker.innerHTML = sortedRoster.map(p =>
+    `<option value="${p.id}" ${p.id === psSelectedPlayerId ? 'selected' : ''}>${p.number ?? '·'} · ${escapeHtml(displayName(p))}</option>`
+  ).join('');
+
+  // 2) Compute the same aggregation as Estadísticas.
+  const allMatches = getAllMatchesForStats();
+  const filtered = applyMatchFilters(allMatches);
+  const selected = filtered.filter(m => statsFilters.selectedMatchIds && statsFilters.selectedMatchIds.has(m.id));
+
+  if (selected.length === 0) {
+    if (subEl) subEl.textContent = 'Ningún partido seleccionado';
+    content.innerHTML = `<div class="panel"><div style="padding:20px; text-align:center; color:#5b6776;">
+      Selecciona uno o más partidos en los filtros para ver los datos del jugador.</div></div>`;
+    return;
+  }
+  for (const m of selected) {
+    if (m.activity && !state.attendanceByActivity[m.activity.id]) {
+      await loadAttendanceForActivity(m.activity.id);
+    }
+  }
+
+  const {byPlayer} = await computeAggregatedStats(selected);
+
+  // 3) Convokados across the selected matches: this is the team pool the
+  //    player is ranked against (Toni's rule: "solo convocados y asiste").
+  //    If no attendance data, fall back to "everyone who did something".
+  const convokedUnion = convokedIdsForMatches(selected);
+  let teamPool;
+  if (convokedUnion) {
+    teamPool = Object.values(byPlayer).filter(s => convokedUnion.has(s.id));
+  } else {
+    teamPool = Object.values(byPlayer).filter(s =>
+      s.minutes > 0 || s.goals || s.chances || s.assistsGoal || s.assistsNoGoal ||
+      s.recoveries || s.losses || s.fouls || s.yellows || s.reds || s.saves ||
+      s.gaBlame || s.oppChances || s.matchesPlayed || s.rotations ||
+      s.duelOffWon || s.duelOffLost || s.duelDefWon || s.duelDefLost);
+  }
+
+  const player = byPlayer[psSelectedPlayerId];
+  if (!player) {
+    content.innerHTML = '<div class="panel"><div style="padding:20px; text-align:center; color:#5b6776;">El jugador seleccionado no tiene datos en estos partidos.</div></div>';
+    return;
+  }
+
+  const j5txt = statsFilters.j5 === 'j5for' ? ' · jugando de 5'
+              : statsFilters.j5 === 'j5against' ? ' · rival de 5' : '';
+  if (subEl) subEl.textContent = `${selected.length} partido${selected.length===1?'':'s'}${j5txt}`;
+
+  renderPlayerStatsCard(player, teamPool, selected, content);
+}
+
+// Transform a raw stat value based on the current calc mode (total / perMatch
+// / perTime). Used both for display and for ranking.
+// Returns null when the divisor is 0 in a rate mode — that player is "not
+// applicable" for the ranking (playing 0 matches shouldn't make you last).
+function psTransform(s, raw) {
+  if (statsFilters.calc === 'perMatch') {
+    return s.matchesPlayed > 0 ? raw / s.matchesPlayed : null;
+  }
+  if (statsFilters.calc === 'perTime')  {
+    const m = s.minutes / 60;
+    return m > 0 ? raw / m : null;
+  }
+  return raw;
+}
+
+// Rank the player against the team pool for a given stat getter. Returns
+// { rank, total } where rank is 1-based (1 = best), total is pool size.
+// direction 'desc' means higher = better (goals); 'asc' means lower = better (losses).
+//
+// Uses COMPETITION RANKING: ties share the same rank and the next value is
+// skipped (e.g. 5 goals / 5 goals / 3 goals → 1, 1, 3). This matches how
+// team rankings are usually shown.
+//
+// Players whose transformed value is null (divisor = 0 in a rate mode) are
+// excluded from the pool AND from the total, so "3º de 8" reflects how many
+// players actually have a comparable number.
+function psRankOf(playerId, teamPool, getter, direction = 'desc') {
+  // Compute (id, value) pairs and drop nulls (n/a for this metric+mode)
+  const values = teamPool
+    .map(s => ({id: s.id, v: psTransform(s, getter(s))}))
+    .filter(x => x.v != null);
+  values.sort((a, b) => direction === 'desc' ? b.v - a.v : a.v - b.v);
+
+  // Find the player's value first — they may have been filtered out above
+  // (e.g. rate mode with matchesPlayed=0). In that case return no rank.
+  const my = values.find(v => v.id === playerId);
+  if (my == null) return {rank: null, total: values.length};
+
+  // Competition ranking: first position where the value matches ours + 1.
+  const rank = values.findIndex(v => v.v === my.v) + 1;
+  return {rank, total: values.length};
+}
+
+// Format a number for display (2 decimals when it's a rate).
+function psFmt(v) {
+  if (v == null || isNaN(v)) return '—';
+  if (statsFilters.calc === 'total') return String(Math.round(v));
+  return v.toFixed(2);
+}
+function psFmtMinutes(sec) {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// Build the "Xº de Y" rank chip. Highlights top-3 in green, bottom-3 in red.
+function psRankChip(playerId, teamPool, getter, direction = 'desc') {
+  const {rank, total} = psRankOf(playerId, teamPool, getter, direction);
+  if (rank == null || total <= 1) return '<span class="ps-rank">—</span>';
+  let cls = 'ps-rank';
+  if (rank === 1) cls += ' rank-top';
+  else if (rank <= 3) cls += ' rank-good';
+  else if (rank >= total - 2 && total > 4) cls += ' rank-bad';
+  return `<span class="${cls}">${rank}º de ${total}</span>`;
+}
+
+// Render the per-player card: header + grouped stat rows with ranks.
+function renderPlayerStatsCard(player, teamPool, selected, content) {
+  // Grouped sections. For each stat we describe: label, getter, ranking direction.
+  const positiveStats = [
+    ['⚽ Goles',              s => s.goals,          'desc'],
+    ['🎯 Ocasiones',          s => s.chances,        'desc'],
+    ['🅰️ Asist. gol',         s => s.assistsGoal,    'desc'],
+    ['🅰️ Asist. sin gol',     s => s.assistsNoGoal,  'desc'],
+    ['🛡️ Recuperaciones',     s => s.recoveries,     'desc'],
+    ['💪 Duelos of. ganados', s => s.duelOffWon,     'desc'],
+    ['🛡️ Duelos def. ganados',s => s.duelDefWon,     'desc'],
+  ];
+  const negativeStats = [
+    ['❌ Pérdidas',           s => s.losses,         'asc'],
+    ['⚠️ Faltas',             s => s.fouls,          'asc'],
+    ['🟨 Amarillas',          s => s.yellows,        'asc'],
+    ['🟥 Rojas',              s => s.reds,           'asc'],
+    ['🥅 Gol enc. (culpa)',   s => s.gaBlame,        'asc'],
+    ['💪 Duelos of. perdidos',s => s.duelOffLost,    'asc'],
+    ['🛡️ Duelos def. perdidos',s => s.duelDefLost,   'asc'],
+  ];
+  const penaltyStats = [
+    ['⚡ Provoca penaltis',        s => s.penaltiesProvoked,   'desc'],
+    ['🥅 Chuta penaltis (goles)',  s => s.penaltiesShotGoal,   'desc'],
+    ['🧤 Para penaltis',           s => s.penaltiesSaved,      'desc'],
+    ['🛑 Comete penaltis',         s => s.penaltiesCommitted,  'asc'],
+    ['⚡ Provoca doble pen.',      s => s.doublePenaltiesProvoked,  'desc'],
+    ['🥅 Chuta doble pen. (gol)',  s => s.doublePenaltiesShotGoal,  'desc'],
+    ['🧤 Para doble pen.',         s => s.doublePenaltiesSaved,     'desc'],
+    ['🛑 Comete doble pen.',       s => s.doublePenaltiesCommitted, 'asc'],
+  ];
+  const generalStats = [
+    ['📋 Partidos convocado', s => s.matchesPlayed,  'desc'],
+    ['⏱ Minutos jugados',    s => s.minutes,         'desc'],
+    ['🔄 Rotaciones',         s => s.rotations,      'desc'],
+  ];
+
+  const renderRow = ([label, getter, direction]) => {
+    const raw = getter(player);
+    const v = psTransform(player, raw);
+    // For minutes we show mm:ss instead of a plain count
+    let displayVal;
+    if (label.startsWith('⏱')) {
+      // Minutes total: keep MM:SS regardless of calc mode; ranking still uses
+      // the raw seconds so per-match / per-min don't skew it visually.
+      displayVal = psFmtMinutes(raw);
+    } else {
+      displayVal = psFmt(v);
+    }
+    const rank = psRankChip(player.id, teamPool, getter, direction);
+    return `<div class="ps-row">
+      <span class="ps-label">${label}</span>
+      <span class="ps-value">${displayVal}</span>
+      ${rank}
+    </div>`;
+  };
+
+  // Player header (name + shirt + total games + minutes summary)
+  const teamSize = teamPool.length;
+  const p = getPlayer(player.id);
+  const pos = p ? (p.position || '') : '';
+  const team = p ? (p.team || 'Senior A') : '';
+  const teamCls = 'team-badge-' + team.toLowerCase().replace(/\s+/g, '-');
+
+  content.innerHTML = `
+    <div class="panel ps-panel">
+      <div class="ps-header">
+        <div class="ps-header-num">${player.number ?? '·'}</div>
+        <div class="ps-header-info">
+          <div class="ps-header-name">${escapeHtml(player.name || '')}</div>
+          <div class="ps-header-meta">
+            ${pos ? `<span class="pos-pill pos-${pos}">${pos}</span>` : ''}
+            <span class="team-badge ${teamCls}">${escapeHtml(team)}</span>
+            <span style="font-size:12px; color:#5b6776;">Ranking sobre <b>${teamSize}</b> jugador${teamSize === 1 ? '' : 'es'}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ps-grid">
+        <div class="ps-block ps-block-general">
+          <h4>📋 General</h4>
+          ${generalStats.map(renderRow).join('')}
+        </div>
+        <div class="ps-block ps-block-pos">
+          <h4>✅ Positivo</h4>
+          ${positiveStats.map(renderRow).join('')}
+        </div>
+        <div class="ps-block ps-block-neg">
+          <h4>⛔ Negativo</h4>
+          ${negativeStats.map(renderRow).join('')}
+        </div>
+        <div class="ps-block ps-block-pen">
+          <h4>🥅 Penaltis</h4>
+          ${penaltyStats.map(renderRow).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 // ---- TOP PLAYERS (positive & negative ranking blocks) ----
 async function renderTopPlayers(selected, content) {
   const calc = statsFilters.calc;
@@ -8594,6 +9211,7 @@ function renderAll() {
     renderBench();
     renderMatchActivityBanner();
     renderSanctionsBanner();
+    renderOppCardsBanner();
     renderEventLog();
   }
   renderStats();
@@ -9925,6 +10543,20 @@ document.getElementById('gkOutfieldBtn').addEventListener('click', () => {
 // Card buttons (yellow / red) → open the person picker with that type
 document.getElementById('cardYellowBtn').addEventListener('click', () => openCardModal('yellow'));
 document.getElementById('cardRedBtn').addEventListener('click', () => openCardModal('red'));
+// Rival card buttons — opens the numeric keypad to enter the opponent shirt number
+document.getElementById('cardYellowRivalBtn').addEventListener('click', () => openOppCardModal('yellow'));
+document.getElementById('cardRedRivalBtn').addEventListener('click', () => openOppCardModal('red'));
+
+// Rival card keypad listeners
+document.getElementById('closeOppCard').addEventListener('click', closeOppCardModal);
+document.getElementById('oppCardCancel').addEventListener('click', closeOppCardModal);
+document.getElementById('oppCardModal').addEventListener('click', e => {
+  if (e.target.id === 'oppCardModal') closeOppCardModal();
+});
+document.getElementById('oppCardConfirm').addEventListener('click', confirmOppCard);
+document.querySelectorAll('#oppCardModal [data-oppkey]').forEach(b => {
+  b.addEventListener('click', () => handleOppCardKey(b.dataset.oppkey));
+});
 document.getElementById('closeCardModal').addEventListener('click', closeCardModal);
 document.getElementById('cardModal').addEventListener('click', e => {
   if (e.target.id === 'cardModal') closeCardModal();
@@ -10242,6 +10874,12 @@ function goToView(viewId) {
     renderTopFilters();
     renderTopStats();
   }
+  // Stats x Jugador — same match-selection defaults as Top Stats
+  if (target === 'playerStats') {
+    initStatsSelectionIfNeeded();
+    renderPlayerStatsFilters();
+    renderPlayerStatsView();
+  }
 }
 
 document.querySelectorAll('.navtab').forEach(t => {
@@ -10438,6 +11076,50 @@ function renderTopFilters() {
   }
 }
 
+// Same as renderTopFilters but for the Stats x Jugador view — reflects the
+// current statsFilters state onto the chip UI.
+function renderPlayerStatsFilters() {
+  document.querySelectorAll('#psFilterCompetition .filter-chip').forEach(c =>
+    c.classList.toggle('active', (c.dataset.comp||'') === statsFilters.competition));
+  document.querySelectorAll('#psFilterVenue .filter-chip').forEach(c =>
+    c.classList.toggle('active', (c.dataset.venue||'') === statsFilters.venue));
+  document.querySelectorAll('#psFilterJuego5 .filter-chip').forEach(c =>
+    c.classList.toggle('active', (c.dataset.j5||'all') === statsFilters.j5));
+  document.querySelectorAll('#psFilterCalc .filter-chip').forEach(c =>
+    c.classList.toggle('active', (c.dataset.calc||'total') === statsFilters.calc));
+  document.getElementById('psSelectAll').classList.toggle('active', statsFilters.matchSelMode === 'all');
+  document.getElementById('psSelectNone').classList.toggle('active', statsFilters.matchSelMode === 'none');
+  document.getElementById('psSelectActive').classList.toggle('active', statsFilters.matchSelMode === 'active');
+  const n = statsFilters.selectedMatchIds?.size || 0;
+  const summ = document.getElementById('psMatchSummary');
+  if (summ) summ.textContent = n === 0 ? 'ninguno' : (n === 1 ? '1 partido' : `${n} partidos`);
+  const picker = document.getElementById('psMatchPicker');
+  if (picker) {
+    const filtered = applyMatchFilters(getAllMatchesForStats());
+    picker.innerHTML = '';
+    filtered.forEach(m => {
+      const checked = statsFilters.selectedMatchIds?.has(m.id);
+      const dateStr = (m.date||'').slice(0,10);
+      const opp = m.opponent ? 'vs ' + escapeHtml(m.opponent) : '(sin rival)';
+      const row = document.createElement('label');
+      row.className = 'match-picker-item';
+      row.innerHTML = `<input type="checkbox" data-mid="${m.id}" ${checked?'checked':''}>
+        <div class="mp-info"><div class="mp-date">${dateStr} · ${opp} ${m.isActive?'<span class="mp-active-badge">activo</span>':''}</div></div>`;
+      picker.appendChild(row);
+    });
+    picker.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('change', e => {
+        const mid = e.target.dataset.mid;
+        if (e.target.checked) statsFilters.selectedMatchIds.add(mid);
+        else statsFilters.selectedMatchIds.delete(mid);
+        statsFilters.matchSelMode = null;
+        renderPlayerStatsFilters();
+        renderPlayerStatsView();
+      });
+    });
+  }
+}
+
 document.querySelectorAll('#topFilterCompetition .filter-chip').forEach(c => {
   c.addEventListener('click', () => { statsFilters.competition = c.dataset.comp||''; resyncSelectionToFilters(); renderTopFilters(); renderTopStats(); renderStatsFilters(); });
 });
@@ -10464,6 +11146,64 @@ document.getElementById('topSelectActive').addEventListener('click', () => {
   statsFilters.selectedMatchIds = new Set();
   if (state.match && state.match.id) statsFilters.selectedMatchIds.add(state.match.id);
   statsFilters.matchSelMode = 'active'; renderTopFilters(); renderTopStats();
+});
+
+// ---- Stats x Jugador filters ----
+// Same statsFilters store as Estadísticas / Top Stats, so switching views
+// keeps the same match selection etc.
+setupMatchPickerToggle('psToggleMatchPicker', 'psMatchPicker');
+document.querySelectorAll('#psFilterCompetition .filter-chip').forEach(c => {
+  c.addEventListener('click', () => {
+    statsFilters.competition = c.dataset.comp || '';
+    resyncSelectionToFilters();
+    renderPlayerStatsFilters();
+    renderPlayerStatsView();
+  });
+});
+document.querySelectorAll('#psFilterVenue .filter-chip').forEach(c => {
+  c.addEventListener('click', () => {
+    statsFilters.venue = c.dataset.venue || '';
+    resyncSelectionToFilters();
+    renderPlayerStatsFilters();
+    renderPlayerStatsView();
+  });
+});
+document.querySelectorAll('#psFilterJuego5 .filter-chip').forEach(c => {
+  c.addEventListener('click', () => {
+    statsFilters.j5 = c.dataset.j5 || 'all';
+    renderPlayerStatsFilters();
+    renderPlayerStatsView();
+  });
+});
+document.querySelectorAll('#psFilterCalc .filter-chip').forEach(c => {
+  c.addEventListener('click', () => {
+    statsFilters.calc = c.dataset.calc || 'total';
+    renderPlayerStatsFilters();
+    renderPlayerStatsView();
+  });
+});
+document.getElementById('psSelectAll').addEventListener('click', () => {
+  statsFilters.selectedMatchIds = new Set(applyMatchFilters(getAllMatchesForStats()).map(m => m.id));
+  statsFilters.matchSelMode = 'all';
+  renderPlayerStatsFilters();
+  renderPlayerStatsView();
+});
+document.getElementById('psSelectNone').addEventListener('click', () => {
+  statsFilters.selectedMatchIds = new Set();
+  statsFilters.matchSelMode = 'none';
+  renderPlayerStatsFilters();
+  renderPlayerStatsView();
+});
+document.getElementById('psSelectActive').addEventListener('click', () => {
+  statsFilters.selectedMatchIds = new Set();
+  if (state.match && state.match.id) statsFilters.selectedMatchIds.add(state.match.id);
+  statsFilters.matchSelMode = 'active';
+  renderPlayerStatsFilters();
+  renderPlayerStatsView();
+});
+document.getElementById('playerStatsPicker').addEventListener('change', (e) => {
+  psSelectedPlayerId = e.target.value;
+  renderPlayerStatsView();
 });
 
 // Subtabs inside Attendance
