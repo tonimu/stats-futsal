@@ -1829,6 +1829,23 @@
   .ps-rank.rank-top { background: #fbbf24; color: #78350f; }
   .ps-rank.rank-good { background: #dcfce7; color: #15803d; }
   .ps-rank.rank-bad { background: #fee2e2; color: #991b1b; }
+  /* Estadísticas-style table with only this player's row, shown below the
+     ranking blocks. Same styling as the main table, just tighter margins. */
+  .ps-table-panel { margin-top: 14px; padding: 12px 14px; }
+  .ps-single-table th, .ps-single-table td {
+    padding: 8px 10px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .ps-single-table th {
+    background: #f8fafc;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    font-weight: 700;
+  }
+  .ps-single-table td.name { font-weight: 700; color: #0f172a; }
   .match-picker-item .mp-active-badge {
     background: #16a34a;
     color: #fff;
@@ -8586,6 +8603,41 @@ function renderPlayerStatsCard(player, teamPool, selected, content) {
   const team = p ? (p.team || 'Senior A') : '';
   const teamCls = 'team-badge-' + team.toLowerCase().replace(/\s+/g, '-');
 
+  // Helpers reused from renderPlayerStats — same math/formatting so the row
+  // Toni sees here is byte-for-byte the same one he'd see in Estadísticas
+  // if it were his row.
+  const calc = statsFilters.calc;
+  const v = (s, raw) => {
+    if (calc === 'total') return fmtNum(raw);
+    if (calc === 'perMatch') return s.matchesPlayed ? fmtNum(raw / s.matchesPlayed) : '';
+    if (calc === 'perTime') {
+      const mins = s.minutes / 60;
+      return mins > 0 ? fmtNum(raw / mins) : '';
+    }
+    return fmtNum(raw);
+  };
+  const minCellFn = (s) => {
+    if (calc === 'perMatch' && s.matchesPlayed) return formatTime(s.minutes / s.matchesPlayed);
+    return formatTime(s.minutes);
+  };
+  const ogpfFn = (s) => calc === 'total'
+    ? `${s.chances}/${s.goals}/${s.chancesSaved}/${s.chancesOff}`
+    : `${v(s, s.chances) || 0}/${v(s, s.goals) || 0}/${v(s, s.chancesSaved) || 0}/${v(s, s.chancesOff) || 0}`;
+  const ogpfGKFn = (s) => calc === 'total'
+    ? `${s.oppChances}/${s.oppGoals}/${s.saves}/${s.oppOff}`
+    : `${v(s, s.oppChances) || 0}/${v(s, s.oppGoals) || 0}/${v(s, s.saves) || 0}/${v(s, s.oppOff) || 0}`;
+  const duelCellFn = (won, lost) => {
+    const total = (won || 0) + (lost || 0);
+    if (total === 0) return '—';
+    const pct = Math.round((won / total) * 100);
+    return `${won}/${total} (${pct}%)`;
+  };
+
+  const calcLabel = calc === 'perMatch' ? 'por partido'
+                  : calc === 'perTime'  ? 'por minuto'
+                  : 'totales';
+  const s = player;
+
   content.innerHTML = `
     <div class="panel ps-panel">
       <div class="ps-header">
@@ -8617,6 +8669,65 @@ function renderPlayerStatsCard(player, teamPool, selected, content) {
           <h4>🥅 Penaltis</h4>
           ${penaltyStats.map(renderRow).join('')}
         </div>
+      </div>
+    </div>
+
+    <!-- Same table as the Estadísticas view, but showing only this player's
+         row. Kept as its own panel below the ranking blocks so Toni can show
+         the player a compact one-row summary at the end. -->
+    <div class="panel ps-table-panel">
+      <div class="panel-title">Fila de Estadísticas (${calcLabel})</div>
+      <div style="overflow-x:auto;">
+        <table class="stats-table ps-single-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th style="text-align:left;">Jugador</th>
+              <th>Pos</th>
+              <th title="Partidos convocado">PC</th>
+              <th>Min</th>
+              <th title="Rotaciones (veces que ha entrado a pista)">Rot</th>
+              <th title="Goles">G</th>
+              <th title="Ocasiones/Goles/Paradas rival/Fuera">O/G/P/F</th>
+              <th title="Asistencias de gol">A·G</th>
+              <th title="Asistencias sin gol">A·SG</th>
+              <th title="Recuperaciones">Recup</th>
+              <th title="Pérdidas">Pérd</th>
+              <th title="Goles encajados por su culpa">GE·C</th>
+              <th title="Faltas">Faltas</th>
+              <th title="Duelos ofensivos: ganados/total (%)">D.Of</th>
+              <th title="Duelos defensivos: ganados/total (%)">D.Def</th>
+              <th>🟨</th>
+              <th>🟥</th>
+              <th title="Portero: Goles encajados">G.Enc</th>
+              <th title="Portero: Ocasiones/Goles/Paradas/Fuera recibidas">O/G/P/F</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>${s.number}</td>
+              <td class="name">${escapeHtml(s.alias || s.name)}</td>
+              <td><span class="pos-pill pos-${s.position}">${s.position}</span></td>
+              <td>${s.matchesPlayed || ''}</td>
+              <td>${minCellFn(s)}</td>
+              <td>${v(s, s.rotations)}</td>
+              <td>${v(s, s.goals)}</td>
+              <td class="ogpf">${ogpfFn(s)}</td>
+              <td>${v(s, s.assistsGoal)}</td>
+              <td>${v(s, s.assistsNoGoal)}</td>
+              <td>${v(s, s.recoveries)}</td>
+              <td>${v(s, s.losses)}</td>
+              <td>${v(s, s.gaBlame)}</td>
+              <td>${v(s, s.fouls)}</td>
+              <td class="ogpf">${duelCellFn(s.duelOffWon, s.duelOffLost)}</td>
+              <td class="ogpf">${duelCellFn(s.duelDefWon, s.duelDefLost)}</td>
+              <td>${v(s, s.yellows)}</td>
+              <td>${v(s, s.reds)}</td>
+              <td>${s.isGK || s.oppChances ? v(s, s.oppGoals) : '—'}</td>
+              <td class="ogpf">${s.isGK || s.oppChances ? ogpfGKFn(s) : '—'}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   `;
