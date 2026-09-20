@@ -2951,14 +2951,19 @@
       <span id="historyLogTitle">📋 Log del partido</span>
       <button class="btn btn-ghost" id="closeHistoryLogModal">✕</button>
     </div>
-    <!-- Quick filter chips: keeps the "find a goal fast" flow tight -->
-    <div id="historyLogFilters" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
-      <button class="filter-chip active" data-histfilter="all">Todo</button>
-      <button class="filter-chip" data-histfilter="goals">⚽ Goles</button>
-      <button class="filter-chip" data-histfilter="chances">🎯 Ocasiones</button>
-      <button class="filter-chip" data-histfilter="penalties">🥅 Penaltis</button>
-      <button class="filter-chip" data-histfilter="cards">🟨🟥 Tarjetas</button>
-      <button class="filter-chip" data-histfilter="subs">🔄 Cambios</button>
+    <!-- Quick filter chips + copy button. Filter chips keep "find a goal fast"
+         flow tight; copy button dumps the currently visible rows as plain text. -->
+    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; align-items:center;">
+      <div id="historyLogFilters" style="display:flex; gap:6px; flex-wrap:wrap; flex:1;">
+        <button class="filter-chip active" data-histfilter="all">Todo</button>
+        <button class="filter-chip" data-histfilter="goals">⚽ Goles</button>
+        <button class="filter-chip" data-histfilter="chances">🎯 Ocasiones</button>
+        <button class="filter-chip" data-histfilter="penalties">🥅 Penaltis</button>
+        <button class="filter-chip" data-histfilter="recoveries">🛡️ Recuperaciones</button>
+        <button class="filter-chip" data-histfilter="cards">🟨🟥 Tarjetas</button>
+        <button class="filter-chip" data-histfilter="subs">🔄 Cambios</button>
+      </div>
+      <button class="btn btn-ghost" id="historyLogCopyBtn" title="Copiar el log (respetando el filtro) al portapapeles">📋 Copiar</button>
     </div>
     <div id="historyLogContainer" style="overflow:auto; flex:1;"></div>
   </div>
@@ -9120,6 +9125,7 @@ function historyLogFilterFn(evt) {
     return evt.type === 'chance' || evt.type === 'opp_chance';
   }
   if (historyLogFilter === 'penalties') return evt.type === 'penalty';
+  if (historyLogFilter === 'recoveries') return evt.type === 'recovery';
   if (historyLogFilter === 'cards') return evt.type === 'yellow' || evt.type === 'red';
   if (historyLogFilter === 'subs') return evt.type === 'sub';
   return true;
@@ -9155,6 +9161,112 @@ function renderHistoryLogTable() {
   ).join('');
   html += '</tbody></table>';
   container.innerHTML = html;
+}
+
+// Build a plain-text version of the history log respecting the current filter.
+// Format: "1ªP 15:23 · ⚽ Gol · Juan Pérez (#7)" — one row per event, easy to
+// paste into WhatsApp/notes/an editor. Emojis included so it reads at a glance.
+function buildHistoryLogText() {
+  const events = [...historyLogEvents]
+    .filter(historyLogFilterFn)
+    .sort((a, b) => (a.period - b.period) || (a.time - b.time) || (a.id > b.id ? 1 : -1));
+
+  const match = state.history.find(m => m.id === historyLogMatchId);
+  const header = match ? [
+    `Log del partido — ${new Date(match.date).toLocaleDateString('es-ES')}${match.opponent ? ' · vs ' + match.opponent : ''} · ${match.scoreFor}-${match.scoreAgainst}`,
+    ''
+  ] : [];
+
+  // Reuse the same label logic as the table so the copied text matches what
+  // Toni sees on screen (including "🟨🟨 2ª amarilla" and RIVAL cards).
+  const lineOf = (evt) => {
+    const periodLabel = evt.period === 1 ? '1ªP' : '2ªP';
+    const time = `${periodLabel} ${formatCountdown(evt.time)}`;
+    const player = evt.playerId ? getPlayer(evt.playerId) : null;
+    const playerTxt = player ? `${displayName(player)} (#${player.number ?? '·'})` : '';
+    let label = actionLabel(evt.type);
+
+    if (evt.type === 'chance') {
+      if (evt.result === 'gol') label = '⚽ Gol';
+      else if (evt.result === 'parada') label = 'Ocasión (parada)';
+      else label = 'Ocasión (fuera)';
+    } else if (evt.type === 'opp_chance') {
+      if (evt.result === 'gol') label = '⚽ Gol rival';
+      else if (evt.result === 'parada') label = '🧤 Parada';
+      else label = 'Oc. rival (fuera)';
+    } else if (evt.type === 'yellow') {
+      const yUp = historyLogEvents.filter(e => e.type === 'yellow' && e.playerId === evt.playerId &&
+        (e.time < evt.time || (e.time === evt.time && e.id <= evt.id))).length;
+      label = yUp >= 2 ? '🟨🟨 2ª amarilla (expulsión)' : '🟨 Amarilla';
+    } else if (evt.type === 'red') {
+      label = '🟥 Roja directa';
+    } else if (evt.type === 'opp_card') {
+      const dorsal = evt.oppNumber ?? '?';
+      if (evt.cardType === 'red') {
+        return `${time} · 🟥 RIVAL #${dorsal} — Roja directa`;
+      }
+      const yUp = historyLogEvents.filter(e => e.type === 'opp_card' && e.cardType === 'yellow' &&
+        e.oppNumber === evt.oppNumber &&
+        (e.time < evt.time || (e.time === evt.time && e.id <= evt.id))).length;
+      return `${time} · ${yUp >= 2 ? '🟨🟨' : '🟨'} RIVAL #${dorsal} — ${yUp >= 2 ? '2ª amarilla (expulsión)' : 'Amarilla'}`;
+    } else if (evt.type === 'sub') {
+      const pIn = evt.playerId ? getPlayer(evt.playerId) : null;
+      const pOut = evt.playerOutId ? getPlayer(evt.playerOutId) : null;
+      const inTxt = pIn ? displayName(pIn) : '(hueco)';
+      const outTxt = pOut ? displayName(pOut) : '(hueco)';
+      return `${time} · 🔄 ${outTxt} → ${inTxt}`;
+    } else if (evt.type === 'penalty') {
+      // Penalty spans two conceptual rows in the UI. Flatten into one line
+      // when copied — it's easier to read that way in plain text.
+      const shooter = evt.shooterId ? getPlayer(evt.shooterId) : null;
+      const gk = evt.gkId ? getPlayer(evt.gkId) : null;
+      const provoker = evt.provokerId ? getPlayer(evt.provokerId) : null;
+      const fouled = evt.fouledId ? getPlayer(evt.fouledId) : null;
+      const kind = evt.doublePenalty ? 'Doble penalti' : 'Penalti';
+      const side = evt.side === 'for' ? 'a favor' : 'en contra';
+      const resultTxt = evt.result === 'gol' ? '⚽ gol' :
+                        evt.result === 'parada' ? '🧤 parada' : '✗ fuera';
+      let who = '';
+      if (evt.side === 'for') {
+        who = `Tira: ${shooter ? displayName(shooter) + ' (#' + (shooter.number ?? '·') + ')' : '?'}` +
+              (provoker ? ` · Provoca: ${displayName(provoker)}` : '');
+      } else {
+        who = `Portero: ${gk ? displayName(gk) + ' (#' + (gk.number ?? '·') + ')' : '?'}` +
+              (fouled ? ` · Comete: ${displayName(fouled)}` : '');
+      }
+      return `${time} · 🥅 ${kind} ${side} · ${resultTxt} · ${who}`;
+    }
+
+    return playerTxt ? `${time} · ${label} · ${playerTxt}` : `${time} · ${label}`;
+  };
+
+  const lines = events.map(lineOf);
+  return header.concat(lines).join('\n');
+}
+
+async function copyHistoryLogToClipboard() {
+  const btn = document.getElementById('historyLogCopyBtn');
+  const original = btn.textContent;
+  const text = buildHistoryLogText();
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      // Fallback: hidden textarea + execCommand for non-secure contexts.
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    btn.textContent = '✓ Copiado';
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  } catch (err) {
+    alert('No se pudo copiar. Selecciona el texto manualmente y cópialo.');
+  }
 }
 
 // Build the plain-text chronicle for WhatsApp.
@@ -10799,6 +10911,8 @@ document.querySelectorAll('#historyLogFilters .filter-chip').forEach(chip => {
     renderHistoryLogTable();
   });
 });
+// Copy button — dumps the currently filtered view to the clipboard as text
+document.getElementById('historyLogCopyBtn').addEventListener('click', copyHistoryLogToClipboard);
 
 // Assist → scorer picker modal
 document.getElementById('closeAssistGoalModal').addEventListener('click', closeAssistGoalModal);
