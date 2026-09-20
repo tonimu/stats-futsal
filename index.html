@@ -1749,6 +1749,45 @@
   .stats-table td.team-goals { font-size: 22px; font-weight: 800; font-family: "Archivo", sans-serif; }
   /* Goal summary tables under the team comparison */
   .goal-tables { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  /* Attack/Defense comparison panel: side-by-side "with A/D" vs "without A/D"
+     numbers. Orange tint on the "with" side to link visually with the mode. */
+  .atkdef-compare {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 2px dashed #e2e8f0;
+  }
+  .atkdef-compare-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: #9a3412;
+    margin-bottom: 4px;
+  }
+  .atkdef-compare-table th.ad-with-head { background: #fff7ed; color: #9a3412; }
+  .atkdef-compare-table th.ad-without-head { background: #f1f5f9; color: #334155; }
+  .atkdef-compare-table td.ad-with {
+    background: #fff7ed;
+    color: #7c2d12;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+  .atkdef-compare-table td.ad-without {
+    background: #f8fafc;
+    color: #334155;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+  .atkdef-compare-table tr.section-sep td {
+    padding: 4px 8px;
+    text-align: center;
+    color: #64748b;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    background: #f8fafc;
+    font-weight: 700;
+  }
   .goal-table-block { }
   .goal-table-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; color: #334155; }
   .goal-table-block .goals-cell { font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -7929,7 +7968,10 @@ async function computeAggregatedStats(selectedMatches) {
 // `periodFilter` (optional): 1 or 2 to restrict events to that period; null/undefined = both.
 // `ignoreJ5Filter` (optional): if true, do NOT apply the global J5 stats filter — used by the
 // live in-match modal so the numbers reflect the whole match regardless of the Stats tab's filter.
-async function computeTeamStats(selectedMatches, periodFilter = null, ignoreJ5Filter = false) {
+async function computeTeamStats(selectedMatches, periodFilter = null, ignoreJ5Filter = false, atkDefFilter = null) {
+  // atkDefFilter: null = all events; true = only events registered while
+  // Attack/Defense mode was active; false = only events registered outside it.
+  // Older events (before the flag existed) count as "not A/D".
   const empty = () => ({goals:0, chances:0, chancesOff:0, chancesSaved:0, recoveries:0, losses:0, fouls:0, yellows:0, reds:0, penalties:0, penaltiesGoals:0});
   const us = empty();
   const them = empty();
@@ -7939,6 +7981,9 @@ async function computeTeamStats(selectedMatches, periodFilter = null, ignoreJ5Fi
     let evts = data.events;
     if (periodFilter === 1 || periodFilter === 2) {
       evts = evts.filter(e => e.period === periodFilter);
+    }
+    if (atkDefFilter !== null) {
+      evts = evts.filter(e => !!e.atkDef === atkDefFilter);
     }
     for (const e of evts) {
       if (!ignoreJ5Filter && !eventMatchesJ5(e)) continue;
@@ -8352,6 +8397,83 @@ async function renderTeamStats(selected) {
           <tbody>${concedersRows}</tbody>
         </table>
       </div>
+    </div>
+  `;
+
+  // ================================================================
+  // Attack/Defense comparison: split all events into two buckets by
+  // whether the mode was active when they happened, then show them
+  // side-by-side. Uses the same computeTeamStats helper with the new
+  // atkDefFilter arg so the totals are apples-to-apples.
+  // ================================================================
+  const withAD = await computeTeamStats(selected, null, false, true);
+  const withoutAD = await computeTeamStats(selected, null, false, false);
+  // Count events per bucket so we can hide the panel if there's nothing
+  // registered under A/D (Toni hasn't used the mode in these matches).
+  let adEventCount = 0;
+  for (const m of selected) {
+    const data = await loadMatchData(m.id, m.isActive);
+    for (const e of data.events) if (e.atkDef) adEventCount++;
+  }
+
+  let comparePanel = document.getElementById('teamAtkDefCompare');
+  if (!comparePanel) {
+    comparePanel = document.createElement('div');
+    comparePanel.id = 'teamAtkDefCompare';
+    table.closest('.panel').appendChild(comparePanel);
+  }
+  if (adEventCount === 0) {
+    comparePanel.style.display = 'none';
+    comparePanel.innerHTML = '';
+    return;
+  }
+
+  const compareRow = (label, a, b) => `<tr>
+    <td class="team-metric">${label}</td>
+    <td class="ad-with">${a}</td>
+    <td class="ad-without">${b}</td>
+  </tr>`;
+
+  comparePanel.style.display = '';
+  comparePanel.innerHTML = `
+    <div class="atkdef-compare">
+      <div class="atkdef-compare-title">⚔️ Con Ataque/Defensa · vs · Sin Ataque/Defensa</div>
+      <div style="font-size:11px; color:#5b6776; margin-bottom:8px;">
+        Solo eventos registrados mientras el sistema estaba activo (izquierda) vs los registrados sin él (derecha).
+      </div>
+      <table class="stats-table atkdef-compare-table">
+        <thead>
+          <tr>
+            <th style="text-align:left;">Métrica</th>
+            <th class="ad-with-head">⚔️ Con A/D</th>
+            <th class="ad-without-head">Sin A/D</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="team-metric">⚽ Goles</td>
+            <td class="ad-with team-goals">${withAD.us.goals}</td>
+            <td class="ad-without team-goals">${withoutAD.us.goals}</td>
+          </tr>
+          ${compareRow('O/G/P/F',
+            `${withAD.us.chances}/${withAD.us.goals}/${withAD.us.chancesSaved}/${withAD.us.chancesOff}`,
+            `${withoutAD.us.chances}/${withoutAD.us.goals}/${withoutAD.us.chancesSaved}/${withoutAD.us.chancesOff}`)}
+          ${compareRow('Penaltis (G)',
+            `${withAD.us.penalties} (${withAD.us.penaltiesGoals})`,
+            `${withoutAD.us.penalties} (${withoutAD.us.penaltiesGoals})`)}
+          ${compareRow('Recuperaciones', withAD.us.recoveries, withoutAD.us.recoveries)}
+          ${compareRow('Pérdidas', withAD.us.losses, withoutAD.us.losses)}
+          ${compareRow('Faltas', withAD.us.fouls, withoutAD.us.fouls)}
+          ${compareRow('🟨 Amarillas', withAD.us.yellows, withoutAD.us.yellows)}
+          ${compareRow('🟥 Rojas', withAD.us.reds, withoutAD.us.reds)}
+          <tr class="section-sep"><td colspan="3">— rival —</td></tr>
+          ${compareRow('⚽ Goles rival', withAD.them.goals, withoutAD.them.goals)}
+          ${compareRow('O/G/P/F rival',
+            `${withAD.them.chances}/${withAD.them.goals}/${withAD.them.chancesSaved}/${withAD.them.chancesOff}`,
+            `${withoutAD.them.chances}/${withoutAD.them.goals}/${withoutAD.them.chancesSaved}/${withoutAD.them.chancesOff}`)}
+          ${compareRow('Faltas rival', withAD.them.fouls, withoutAD.them.fouls)}
+        </tbody>
+      </table>
     </div>
   `;
 }
