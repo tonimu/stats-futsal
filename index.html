@@ -7162,14 +7162,28 @@ function renderEventLog() {
   const container = document.getElementById('eventLog');
   if (!container) return;
 
-  // Events shown reverse-chronologically (newest on top), most recent 50.
+  // Events shown reverse-chronologically (newest on top).
+  // Live match: keep the last 50 (perf + Toni cares about recent).
+  // Historical edit mode: show them ALL so nothing is hidden while correcting.
   // Legacy possession events (from before possession was removed) are hidden.
   const allEvents = [...state.match.events];
-  const actionEvents = allEvents.filter(e => e.type !== 'possession').reverse().slice(0, 50);
+  const nonPossession = allEvents.filter(e => e.type !== 'possession').reverse();
+  const editingHistorical = !!(state.match && state.match._editingHistorical);
+  const LIVE_LIMIT = 50;
+  const totalCount = nonPossession.length;
+  const actionEvents = editingHistorical ? nonPossession : nonPossession.slice(0, LIVE_LIMIT);
+  const truncated = !editingHistorical && totalCount > LIVE_LIMIT;
 
   // Build a compact table. We keep the header sticky so it stays visible
   // while the user scrolls back through the match.
-  let html = `
+  let html = '';
+  if (editingHistorical && totalCount > 0) {
+    // Small notice so Toni knows the whole match is loaded
+    html += `<div style="font-size:11px; color:#78350f; background:#fef3c7; padding:6px 10px; border-radius:4px; margin-bottom:6px;">
+      🔓 Modo edición · Mostrando <b>${totalCount}</b> eventos (todo el partido).
+    </div>`;
+  }
+  html += `
     <table class="event-log-table">
       <thead>
         <tr>
@@ -7188,6 +7202,12 @@ function renderEventLog() {
     html += actionEvents.map(evt => buildEventTableRow(evt)).join('');
   }
   html += `</tbody></table>`;
+  // Live matches with more than 50 events: tell the user + offer expansion
+  if (truncated) {
+    html += `<div style="font-size:11px; color:#5b6776; padding:6px 10px; text-align:center;">
+      Mostrando los últimos ${LIVE_LIMIT} de ${totalCount} eventos.
+    </div>`;
+  }
   container.innerHTML = html;
   bindEventRows(container);
 }
