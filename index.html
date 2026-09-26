@@ -3651,6 +3651,25 @@ async function saveCurrentMatch() {
   await dbPut('matches', stripMatchForDB(state.match));
 }
 
+// Fill in a match's display fields (opponent, competition, venue) from its
+// linked activity when the match's own field is empty. Fixes the case where a
+// Partido activity was created with no rival name (or partial data) and the
+// name was added to the activity later: without this the match keeps the
+// blank it copied at creation time, so the stats picker and history show
+// "(sin rival)" even after the activity is edited. The match's own field
+// wins if set — we only fill blanks. Returns true if anything changed so the
+// caller can persist it to the DB.
+function backfillMatchFromActivity(m) {
+  if (!m || !m.activityId) return false;
+  const act = state.activities.find(a => a.id === m.activityId);
+  if (!act) return false;
+  let changed = false;
+  if (!m.opponent && act.opponent)       { m.opponent = act.opponent;         changed = true; }
+  if (!m.competition && act.competition) { m.competition = act.competition;   changed = true; }
+  if (!m.venue && act.venue)             { m.venue = act.venue;               changed = true; }
+  return changed;
+}
+
 async function saveAllPlayers() {
   // Wipe + rewrite is simpler and the table is tiny (10-15 players)
   await dbClear('players');
@@ -3785,6 +3804,27 @@ async function loadState() {
       }
     }
   } catch (e) { console.warn('activity migration failed', e); }
+
+  // Back-fill missing rival/competition/venue on matches from their linked
+  // activity. Runs after activities are loaded so the lookup works. Persists
+  // any change so the fix sticks (backups, future reloads without the linked
+  // activity, etc.). Errors here don't break the rest of loadState.
+  try {
+    if (state.match && backfillMatchFromActivity(state.match)) {
+      await saveCurrentMatch();
+    }
+    for (const h of state.history) {
+      if (backfillMatchFromActivity(h)) {
+        const dbRec = await dbGet('matches', h.id);
+        if (dbRec) {
+          if (!dbRec.opponent && h.opponent)       dbRec.opponent = h.opponent;
+          if (!dbRec.competition && h.competition) dbRec.competition = h.competition;
+          if (!dbRec.venue && h.venue)             dbRec.venue = h.venue;
+          await dbPut('matches', dbRec);
+        }
+      }
+    }
+  } catch (e) { console.warn('match/activity back-fill failed', e); }
 
   // Backfill new match fields if loading an older saved match
   if (state.match) {
@@ -10024,7 +10064,27 @@ async function openActivityEditor(actId) {
   act.competition = newCompetition;
   act.venue = newVenue;
   await saveActivity(act);
-  renderActivitiesList();
+  // Propagate the edit to any match linked to this activity whose fields are
+  // still blank. Matches with their own non-empty value are left alone so a
+  // deliberate per-match override isn't silently overwritten. This keeps the
+  // stats picker and history in sync without needing a page reload.
+  try {
+    if (state.match && state.match.activityId === act.id && backfillMatchFromActivity(state.match)) {
+      await saveCurrentMatch();
+    }
+    for (const h of state.history) {
+      if (h.activityId === act.id && backfillMatchFromActivity(h)) {
+        const dbRec = await dbGet('matches', h.id);
+        if (dbRec) {
+          if (!dbRec.opponent && h.opponent)       dbRec.opponent = h.opponent;
+          if (!dbRec.competition && h.competition) dbRec.competition = h.competition;
+          if (!dbRec.venue && h.venue)             dbRec.venue = h.venue;
+          await dbPut('matches', dbRec);
+        }
+      }
+    }
+  } catch (e) { console.warn('activity-edit → match propagation failed', e); }
+  renderAll();
 }
 
 // ============================================================
