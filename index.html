@@ -2367,6 +2367,15 @@
         </div>
       </div>
 
+      <!-- Historical edit banner — shown when Toni reopened a finished match
+           from the History view to make corrections. -->
+      <div id="historicalEditBanner" style="display:none; padding:10px 14px; background:#fef3c7; border-bottom:2px solid #fbbf24; align-items:center; gap:12px; justify-content:space-between; flex-wrap:wrap;">
+        <div style="font-size:13px; color:#78350f; font-weight:700;">
+          🔓 Editando partido histórico — <span id="historicalEditLabel">—</span> · Los cambios se guardan al terminar.
+        </div>
+        <button class="btn btn-primary btn-tiny" id="endHistoricalEditBtn" style="background:#78350f; border-color:#78350f;">🔒 Terminar edición</button>
+      </div>
+
       <!-- Sanctions banner (active expulsions / inferiority countdown) -->
       <div id="sanctionsBanner" style="display:none;"></div>
 
@@ -4320,6 +4329,12 @@ function setRemainingTime(remainingSec) {
 }
 
 function toggleTimer() {
+  // In historical edit mode the clock does not move — the match is closed.
+  // Toni just wants to insert/edit events with their existing timestamps.
+  if (state.match && state.match._editingHistorical) {
+    alert('El reloj no corre durante la edición de un partido histórico.\nUsa ✏️ en el log para ajustar el tiempo de un evento, o pulsa la hora en un evento nuevo.');
+    return;
+  }
   const t = state.match.timer;
   if (t.running) {
     // Pause the match clock. The video stopwatch keeps running (the camera does too).
@@ -9151,6 +9166,7 @@ function renderHistory() {
         </div>
         <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
           <button class="btn btn-ghost" data-viewlog="${m.id}" title="Ver el log del partido">📋 Ver log</button>
+          <button class="btn btn-ghost" data-editmatch="${m.id}" title="Reabrir el partido para editarlo con las herramientas normales">🔓 Editar</button>
           <button class="btn btn-primary" data-chronicle="${m.id}" title="Preparar texto de crónica para WhatsApp">📱 Crónica</button>
           <button class="btn btn-ghost" data-export="${m.id}">📥 Exportar</button>
           <button class="btn btn-danger" data-del="${m.id}">Eliminar</button>
@@ -9194,6 +9210,109 @@ function renderHistory() {
       openHistoryLogModal(mid);
     });
   });
+  list.querySelectorAll('[data-editmatch]').forEach(b => {
+    b.addEventListener('click', e => {
+      const mid = e.currentTarget.dataset.editmatch;
+      beginHistoricalMatchEdit(mid);
+    });
+  });
+}
+
+// ============================================================
+// HISTORICAL MATCH EDIT MODE
+// ============================================================
+// Load a finished match back into state.match so Toni can use the normal
+// live tools (action buttons, event editor ✏️/↩, keypad, sub picker, atkDef
+// wizard, etc.) to fix / add / remove events. Any live change is persisted
+// through the same paths as during the match. When leaving, we recompute the
+// match summary from events and put back the previously-active match (if any).
+let _savedActiveMatchDuringEdit = null;
+
+async function beginHistoricalMatchEdit(matchId) {
+  const summary = state.history.find(m => m.id === matchId);
+  if (!summary) return;
+  // If a live match is running, ask before switching context.
+  if (state.match && state.match.id !== matchId) {
+    const running = state.match.timer && state.match.timer.running;
+    const msg = running
+      ? 'Tienes un partido en curso con el reloj corriendo. Si continúas, se pausará y se guardará. ¿Editar el partido histórico?'
+      : '¿Cambiar al partido histórico para editarlo? El partido activo se guardará y volverá al abrir uno nuevo.';
+    if (!confirm(msg)) return;
+    if (running) {
+      state.match.timer.running = false;
+      state.match.timer.lastStart = null;
+    }
+    await saveCurrentMatch();
+    _savedActiveMatchDuringEdit = state.match;
+  } else {
+    _savedActiveMatchDuringEdit = null;
+  }
+  // Load full match data (events + subs) from IndexedDB
+  const data = await loadMatchData(matchId, false);
+  // Build a state.match-compatible object from the history summary
+  const editable = {
+    ...summary,
+    events: [...(data.events || [])].sort((a, b) => (a.period - b.period) || (a.time - b.time) || (a.id > b.id ? 1 : -1)),
+    subs: data.subs || {},
+    // Timer stays paused; the match is closed.
+    timer: (summary.timer && typeof summary.timer === 'object')
+      ? {...summary.timer, running: false, lastStart: null}
+      : {running: false, lastStart: null, elapsedMs: 0, period: 2},
+    isActive: false,
+    _editingHistorical: true,
+  };
+  // Ensure required arrays exist
+  editable.onCourt = editable.onCourt || [null, null, null, null, null];
+  editable.expelledPlayers = editable.expelledPlayers || [];
+  editable.sanctions = editable.sanctions || [];
+  editable.attackDefensePairs = editable.attackDefensePairs || [];
+  state.match = editable;
+  // Navigate to match view + rerender all + show the edit banner
+  const matchTab = document.querySelector('.navtab[data-view="match"]');
+  if (matchTab) matchTab.click();
+  applyHistoricalEditBanner();
+  renderAll();
+}
+
+async function endHistoricalMatchEdit() {
+  if (!state.match || !state.match._editingHistorical) return;
+  const matchId = state.match.id;
+  const currentEvents = [...(state.match.events || [])];
+  // Persist any last change + recompute the summary from events
+  await saveCurrentMatch();
+  await recomputeMatchSummaryFromEvents(matchId);
+  invalidateMatchDataCache(matchId);
+  // Keep the in-memory history summary in sync with the (now-edited) events
+  // so stats views that read from it (without re-hitting IndexedDB) are fresh.
+  const idx = state.history.findIndex(m => m.id === matchId);
+  if (idx >= 0) {
+    state.history[idx].events = currentEvents;
+  }
+  // Restore previous active match if there was one; otherwise clear
+  state.match = _savedActiveMatchDuringEdit || null;
+  _savedActiveMatchDuringEdit = null;
+  applyHistoricalEditBanner();
+  // Go to history view + rerender
+  const histTab = document.querySelector('.navtab[data-view="history"]');
+  if (histTab) histTab.click();
+  if (typeof renderHistory === 'function') renderHistory();
+  renderAll();
+}
+
+// Show/hide the persistent yellow banner at the top of the match view.
+function applyHistoricalEditBanner() {
+  const banner = document.getElementById('historicalEditBanner');
+  if (!banner) return;
+  if (state.match && state.match._editingHistorical) {
+    banner.style.display = 'flex';
+    const summary = state.history.find(m => m.id === state.match.id);
+    const label = summary
+      ? `${new Date(summary.date).toLocaleDateString('es-ES')} · vs ${summary.opponent || '—'}`
+      : 'partido histórico';
+    document.getElementById('historicalEditLabel').textContent = label;
+  } else {
+    banner.style.display = 'none';
+  }
 }
 
 // ============================================================
@@ -9251,15 +9370,11 @@ async function openHistoryLogModal(matchId) {
   if (!match) return;
   historyLogMatchId = matchId;
   historyLogFilter = 'all';
-  // Reset the chip UI to "All"
   document.querySelectorAll('#historyLogFilters .filter-chip').forEach(c => {
     c.classList.toggle('active', c.dataset.histfilter === 'all');
   });
-  // Load events for this match (uses same helper as stats — will hit cache
-  // on the second open of the same match).
   const data = await loadMatchData(matchId, false);
   historyLogEvents = [...(data.events || [])];
-  // Title with date + rival + final score for context
   const date = new Date(match.date).toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit', year:'numeric'});
   const rival = match.opponent ? ` · vs ${match.opponent}` : '';
   const score = ` · ${match.scoreFor}-${match.scoreAgainst}`;
@@ -9267,6 +9382,7 @@ async function openHistoryLogModal(matchId) {
   renderHistoryLogTable();
   document.getElementById('historyLogModal').style.display = 'flex';
 }
+
 function closeHistoryLogModal() {
   historyLogMatchId = null;
   historyLogEvents = [];
@@ -9297,15 +9413,12 @@ function renderHistoryLogTable() {
   const container = document.getElementById('historyLogContainer');
   const events = [...historyLogEvents]
     .filter(historyLogFilterFn)
-    // Chronological order — same sort key as the live log so what Toni sees
-    // matches what he'd see mid-match.
     .sort((a, b) => (a.period - b.period) || (a.time - b.time) || (a.id > b.id ? 1 : -1));
 
   if (events.length === 0) {
     container.innerHTML = '<div style="padding:30px; text-align:center; color:#5b6776;">Sin eventos para este filtro.</div>';
     return;
   }
-  // Same table structure as the live event log, but read-only (no ✏️/↩).
   let html = `
     <table class="event-log-table">
       <thead>
@@ -9323,6 +9436,34 @@ function renderHistoryLogTable() {
   ).join('');
   html += '</tbody></table>';
   container.innerHTML = html;
+}
+
+// Small helper: drop the in-memory cache for a match so subsequent stats
+// reads re-hit IndexedDB. Used after historical edits.
+function invalidateMatchDataCache(matchId) {
+  if (typeof _matchDataCache !== 'undefined' && _matchDataCache[matchId]) {
+    delete _matchDataCache[matchId];
+  }
+}
+
+// Recompute scoreFor/scoreAgainst for a historical match from its events
+// and persist to state.history + IndexedDB. Called when leaving edit mode.
+async function recomputeMatchSummaryFromEvents(matchId) {
+  const data = await loadMatchData(matchId, false);
+  let sf = 0, sa = 0;
+  for (const e of data.events) {
+    if (e.type === 'chance' && e.result === 'gol') sf++;
+    else if (e.type === 'opp_chance' && e.result === 'gol') sa++;
+    else if (e.type === 'penalty' && e.result === 'gol') {
+      if (e.side === 'for') sf++;
+      else if (e.side === 'against') sa++;
+    }
+  }
+  const idx = state.history.findIndex(m => m.id === matchId);
+  if (idx < 0) return;
+  state.history[idx].scoreFor = sf;
+  state.history[idx].scoreAgainst = sa;
+  try { await dbPut('matches', state.history[idx]); } catch(e) { console.error('save match failed', e); }
 }
 
 // Build a plain-text version of the history log respecting the current filter.
@@ -9597,6 +9738,7 @@ function renderAll() {
     renderMatchActivityBanner();
     renderSanctionsBanner();
     renderOppCardsBanner();
+    if (typeof applyHistoricalEditBanner === 'function') applyHistoricalEditBanner();
     renderEventLog();
   }
   renderStats();
@@ -10870,6 +11012,10 @@ function exportAsistenciaReportCsv() {
 // ============================================================
 document.getElementById('playPauseBtn').addEventListener('click', toggleTimer);
 document.getElementById('endPeriodBtn').addEventListener('click', () => {
+  if (state.match && state.match._editingHistorical) {
+    alert('El partido histórico ya está cerrado. Pulsa "🔒 Terminar edición" para volver al historial.');
+    return;
+  }
   if (confirm('¿Finalizar parte actual?')) endPeriod();
 });
 
@@ -11095,6 +11241,9 @@ document.querySelectorAll('#historyLogFilters .filter-chip').forEach(chip => {
 });
 // Copy button — dumps the currently filtered view to the clipboard as text
 document.getElementById('historyLogCopyBtn').addEventListener('click', copyHistoryLogToClipboard);
+
+// Historical match edit — end edit button in the yellow banner
+document.getElementById('endHistoricalEditBtn').addEventListener('click', endHistoricalMatchEdit);
 
 // Assist → scorer picker modal
 document.getElementById('closeAssistGoalModal').addEventListener('click', closeAssistGoalModal);
