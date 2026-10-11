@@ -27,7 +27,7 @@ Sin build step, sin framework, JS vanilla, CSS vanilla, HTML embebido en el mism
 
 - **UI**: HTML embebido con secciones `.view` ocultas/mostradas por el sidebar (navtabs). Cada view tiene su `#view-<nombre>`.
 - **Estado en memoria**: objeto global `state = { roster, staff, match, history, activities, attendanceByActivity, ... }`.
-- **Persistencia**: IndexedDB (`cns-stats-db`), stores: matches, events, roster, staff, activities, attendance, subs.
+- **Persistencia**: IndexedDB (`futsal_stats_db`), stores: matches, events, players (en memoria `state.roster`), staff, activities, attendance, subs, settings.
 - **PWA**: service worker (`sw.js`) para funcionar offline.
 - **Renderizado**: funciones `render*` que leen de `state` y escriben al DOM. `renderAll()` las orquesta todas.
 
@@ -47,7 +47,7 @@ Sin build step, sin framework, JS vanilla, CSS vanilla, HTML embebido en el mism
 
 - **matches**: `{id, date, opponent, competition, venue, scoreFor, scoreAgainst, onCourt, rosterSnapshot, status, timer, mvpPlayerId, juego5For, juego5Against, attackDefenseActive, attackDefensePairs, expelledPlayers, sanctions, ...}`
 - **events**: `{id, matchId, type, playerId, time, period, onCourt, juego5For, juego5Against, atkDef, ...typeSpecific}`
-- **roster**: `{id, name, alias, number, position, isGK, traits, birthDate, team}`
+- **players** (`state.roster`): `{id, name, alias, number, position, isGK, traits, birthDate, team}`
 - **staff**, **activities**, **attendance** (`attendanceByActivity[activityId]`), **subs**.
 
 ### Tipos de evento
