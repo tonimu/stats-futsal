@@ -4892,10 +4892,7 @@ async function logAction(type, playerId, extra = {}) {
     type, playerId,
     time,
     period,
-    onCourt: [...state.match.onCourt],
-    juego5For: !!state.match.juego5For,
-    juego5Against: !!state.match.juego5Against,
-    atkDef: !!state.match.attackDefenseActive,
+    ...getEventContext(),
     ...extra,
   };
   state.match.events.push(evt);
@@ -4924,7 +4921,7 @@ async function logAction(type, playerId, extra = {}) {
     // opponent chance/goal against the GK. That way we don't need a second tap
     // to increment the scoreboard when someone gifts a goal.
     if (type === 'ga_blame') {
-      await logAction('opp_chance', state.match.onCourt[0] || null, {
+      await logAction('opp_chance', evt.onCourt[0] || null, {
         result: 'gol',
         time: evt.time,
         period: evt.period,
@@ -4939,7 +4936,7 @@ async function logAction(type, playerId, extra = {}) {
     if (type === 'assist_goal') {
       finishInsertMode();
       renderAll();
-      openAssistGoalModal(playerId, evt.time, evt.period);
+      openAssistGoalModal(playerId, evt.time, evt.period, eventContextOf(evt));
       return;
     }
     // duel_def_won → ask if there was a recovery.
@@ -4958,6 +4955,7 @@ async function logAction(type, playerId, extra = {}) {
           await logAction('recovery', playerId, {
             time: evt.time,
             period: evt.period,
+            ...eventContextOf(evt),
             autoFromDuel: true,
             _chained: true,
           });
@@ -4980,6 +4978,7 @@ async function logAction(type, playerId, extra = {}) {
           await logAction('loss', playerId, {
             time: evt.time,
             period: evt.period,
+            ...eventContextOf(evt),
             autoFromDuel: true,
             _chained: true,
           });
@@ -4997,7 +4996,7 @@ async function logAction(type, playerId, extra = {}) {
 // working (e.g. handleResultPick and the "Chance rival" prompt). All the score
 // and sanction logic lives inside logAction now.
 async function logOpponentChance(result) {
-  await logAction('opp_chance', state.match.onCourt[0] || null, {result});
+  await logAction('opp_chance', getEventContext().onCourt[0] || null, {result});
 }
 
 // Opponent foul: single tap, no player.
@@ -5010,10 +5009,7 @@ async function logOpponentFoul() {
     playerId: null,
     time,
     period,
-    onCourt: [...state.match.onCourt],
-    juego5For: !!state.match.juego5For,
-    juego5Against: !!state.match.juego5Against,
-    atkDef: !!state.match.attackDefenseActive,
+    ...getEventContext(),
   };
   state.match.events.push(evt);
   await saveEvent(evt);
@@ -5042,6 +5038,10 @@ function startInsertMode(refEvt) {
   insertModeOverride = {
     time: newTime,
     period: refEvt.period || 1,
+    // Inherit the on-court/J5/AtkDef snapshot of the reference event: the live
+    // state (in historical edit = end of match) would corrupt +/- and quintets.
+    // Legacy events without a snapshot fall back to the live state.
+    ctx: Array.isArray(refEvt.onCourt) ? eventContextOf(refEvt) : null,
   };
 }
 function getEventTimeAndPeriod() {
@@ -5050,6 +5050,26 @@ function getEventTimeAndPeriod() {
     return { time: insertModeOverride.time, period: insertModeOverride.period };
   }
   return { time: currentMatchSeconds(), period: state.match.timer.period };
+}
+// Context snapshot stored on every action event.
+function eventContextOf(evt) {
+  return {
+    onCourt: [...(evt.onCourt || [null, null, null, null, null])],
+    juego5For: !!evt.juego5For,
+    juego5Against: !!evt.juego5Against,
+    atkDef: !!evt.atkDef,
+  };
+}
+function getEventContext() {
+  if (insertModeOverride && insertModeOverride.ctx) {
+    return eventContextOf(insertModeOverride.ctx);
+  }
+  return {
+    onCourt: [...state.match.onCourt],
+    juego5For: !!state.match.juego5For,
+    juego5Against: !!state.match.juego5Against,
+    atkDef: !!state.match.attackDefenseActive,
+  };
 }
 function finishInsertMode() {
   insertModeOverride = null;
@@ -5146,10 +5166,7 @@ async function confirmOppCard() {
     cardType,                // 'yellow' | 'red'
     time,
     period,
-    onCourt: [...state.match.onCourt],
-    juego5For: !!state.match.juego5For,
-    juego5Against: !!state.match.juego5Against,
-    atkDef: !!state.match.attackDefenseActive,
+    ...getEventContext(),
   };
   state.match.events.push(evt);
   await saveEvent(evt);
@@ -5632,10 +5649,7 @@ async function logCard(cardType, personId, context) {
     playerId: personId,
     time: tp.time,
     period: tp.period,
-    onCourt: [...state.match.onCourt],
-    juego5For: !!state.match.juego5For,
-    juego5Against: !!state.match.juego5Against,
-    atkDef: !!state.match.attackDefenseActive,
+    ...getEventContext(),
     context: context || 'court',
   };
   state.match.events.push(evt);
@@ -5652,10 +5666,7 @@ async function logCard(cardType, personId, context) {
         playerId: personId,
         time: tp.time,
         period: tp.period,
-        onCourt: [...state.match.onCourt],
-        juego5For: !!state.match.juego5For,
-        juego5Against: !!state.match.juego5Against,
-        atkDef: !!state.match.attackDefenseActive,
+        ...eventContextOf(evt),
         autoFromBenchCard: true,
       };
       state.match.events.push(foulEvt);
@@ -5807,8 +5818,11 @@ async function logDuel(kind, playerId) {
 // for the case when the goal was already registered separately.
 let assistGoalContext = null; // { assisterId, time, period }
 
-function openAssistGoalModal(assisterId, time, period) {
-  assistGoalContext = { assisterId, time, period };
+function openAssistGoalModal(assisterId, time, period, evtCtx) {
+  // evtCtx: context snapshot of the assist, so the goal (and the candidate
+  // list) match the moment of the assist even in insert mode.
+  evtCtx = evtCtx || getEventContext();
+  assistGoalContext = { assisterId, time, period, evtCtx };
   const assister = getPlayer(assisterId);
   const hint = document.getElementById('assistGoalHint');
   hint.textContent = assister
@@ -5817,13 +5831,13 @@ function openAssistGoalModal(assisterId, time, period) {
 
   // Candidates: on-court players except the assister. Order = slot order.
   const list = document.getElementById('assistGoalList');
-  const slotIds = state.match.onCourt.filter(pid => pid && pid !== assisterId);
+  const slotIds = evtCtx.onCourt.filter(pid => pid && pid !== assisterId);
   const players = slotIds.map(pid => getPlayer(pid)).filter(Boolean);
   if (players.length === 0) {
     list.innerHTML = '<div style="grid-column:1/-1; padding:20px; text-align:center; color:#5b6776;">No hay otros jugadores en pista para atribuir el gol.</div>';
   } else {
     list.innerHTML = players.map(p => {
-      const gkCls = state.match.onCourt[0] === p.id ? ' gk' : '';
+      const gkCls = evtCtx.onCourt[0] === p.id ? ' gk' : '';
       return `<button class="player-card${gkCls}" data-assistgoal="${p.id}">
         <div class="player-num">${p.number ?? '·'}</div>
         <div class="player-name-card">${escapeHtml(displayName(p))}</div>
@@ -5847,6 +5861,7 @@ async function handleAssistGoalPick(scorerId) {
     result: 'gol',
     time: ctx.time,
     period: ctx.period,
+    ...ctx.evtCtx,
     autoFromAssist: true,
     assistedById: ctx.assisterId,
   });
@@ -6171,10 +6186,7 @@ async function logPenalty(result) {
     result,                             // 'fuera' | 'parada' | 'gol'
     time: tp.time,
     period: tp.period,
-    onCourt: [...state.match.onCourt],
-    juego5For: !!state.match.juego5For,
-    juego5Against: !!state.match.juego5Against,
-    atkDef: !!state.match.attackDefenseActive,
+    ...getEventContext(),
   };
   state.match.events.push(evt);
   await saveEvent(evt);
@@ -6203,10 +6215,7 @@ async function logPenalty(result) {
       playerId: w.side === 'for' ? null : w.fouledId,
       time: tp.time,
       period: tp.period,
-      onCourt: [...state.match.onCourt],
-      juego5For: !!state.match.juego5For,
-      juego5Against: !!state.match.juego5Against,
-      atkDef: !!state.match.attackDefenseActive,
+      ...getEventContext(),
       autoFromPenalty: true,
     };
     state.match.events.push(foulEvt);
@@ -7166,9 +7175,14 @@ function renderEventLog() {
   // Live match: keep the last 50 (perf + Toni cares about recent).
   // Historical edit mode: show them ALL so nothing is hidden while correcting.
   // Legacy possession events (from before possession was removed) are hidden.
-  const allEvents = [...state.match.events];
-  const nonPossession = allEvents.filter(e => e.type !== 'possession').reverse();
   const editingHistorical = !!(state.match && state.match._editingHistorical);
+  const allEvents = [...state.match.events];
+  // Historical edit: sort by match time so inserted events show in place
+  // (same order as the history log modal). Live: keep insertion order.
+  if (editingHistorical) {
+    allEvents.sort((a, b) => (a.period - b.period) || (a.time - b.time) || (a.id > b.id ? 1 : -1));
+  }
+  const nonPossession = allEvents.filter(e => e.type !== 'possession').reverse();
   const LIVE_LIMIT = 50;
   const totalCount = nonPossession.length;
   const actionEvents = editingHistorical ? nonPossession : nonPossession.slice(0, LIVE_LIMIT);
