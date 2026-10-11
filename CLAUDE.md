@@ -15,7 +15,7 @@ Sin build step, sin framework, JS vanilla, CSS vanilla, HTML embebido en el mism
 3. **Preservar backward compatibility del modelo de datos**. Los usuarios tienen partidos guardados en IndexedDB. Cualquier cambio al schema necesita migración silenciosa en `ensureMatchShape` / `ensurePlayerShape` / etc.
 4. **Validar sintaxis antes de dar por bueno un cambio**:
 ```bash
-   node -e "const fs=require('fs');const h=fs.readFileSync('index.html','utf-8');const s=[...h.matchAll(/<script>([\s\S]*?)<\/script>/g)];s.forEach((m,i)=>fs.writeFileSync('/tmp/s'+i+'.js',m[1]));" && for f in /tmp/s*.js; do node --check "$f" || exit 1; done && echo "Sintaxis OK"
+   node -e "const fs=require('fs'),os=require('os'),path=require('path'),{execFileSync}=require('child_process');const h=fs.readFileSync('index.html','utf-8');const s=[...h.matchAll(/<script>([\s\S]*?)<\/script>/g)];const d=fs.mkdtempSync(path.join(os.tmpdir(),'cns-'));try{s.forEach((m,i)=>{const f=path.join(d,'s'+i+'.js');fs.writeFileSync(f,m[1]);execFileSync(process.execPath,['--check',f],{stdio:'inherit'});});console.log('Sintaxis OK ('+s.length+' bloques)');}catch(e){process.exit(1);}finally{fs.rmSync(d,{recursive:true,force:true});}"
 ```
 5. **Prefer `str_replace` sobre reescribir bloques grandes**. Edits quirúrgicos.
 6. **Comentarios de código en inglés**. Interacciones conmigo en **español**.
@@ -128,8 +128,9 @@ Sin build step, sin framework, JS vanilla, CSS vanilla, HTML embebido en el mism
 
 ### Validar sintaxis
 ```bash
-node -e "const fs=require('fs');const h=fs.readFileSync('index.html','utf-8');const s=[...h.matchAll(/<script>([\s\S]*?)<\/script>/g)];s.forEach((m,i)=>fs.writeFileSync('/tmp/s'+i+'.js',m[1]));" && for f in /tmp/s*.js; do node --check "$f" || exit 1; done && echo "Sintaxis OK"
+node -e "const fs=require('fs'),os=require('os'),path=require('path'),{execFileSync}=require('child_process');const h=fs.readFileSync('index.html','utf-8');const s=[...h.matchAll(/<script>([\s\S]*?)<\/script>/g)];const d=fs.mkdtempSync(path.join(os.tmpdir(),'cns-'));try{s.forEach((m,i)=>{const f=path.join(d,'s'+i+'.js');fs.writeFileSync(f,m[1]);execFileSync(process.execPath,['--check',f],{stdio:'inherit'});});console.log('Sintaxis OK ('+s.length+' bloques)');}catch(e){process.exit(1);}finally{fs.rmSync(d,{recursive:true,force:true});}"
 ```
+Multiplataforma: funciona igual en PowerShell, Git Bash, macOS y Linux. Usa el temporal del sistema (`os.tmpdir()`) y lo borra al terminar. Si hay un error de sintaxis, muestra fichero, línea y columna, y sale con código 1.
 
 ### Previsualizar en local
 ```bash
