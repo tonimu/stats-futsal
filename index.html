@@ -1197,6 +1197,30 @@
   .team-badge-senior-a          { background: #dcfce7; color: #14532d; border-color: #86efac; }
   .team-badge-senior-b          { background: #dbeafe; color: #1e3a8a; border-color: #93c5fd; }
   .team-badge-juvenil-nacional  { background: #fef3c7; color: #78350f; border-color: #fbbf24; }
+  /* Players who left the club: tag in reports + dimmed roster row */
+  .left-badge {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    padding: 1px 6px;
+    margin-left: 4px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #cbd5e1;
+    vertical-align: middle;
+  }
+  .roster-item.is-left { opacity: 0.6; background: #e2e8f0; }
+  .roster-item.is-left:hover { opacity: 1; }
+  .roster-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 14px 0 2px;
+  }
   .roster-traits-row {
     display: flex;
     flex-wrap: wrap;
@@ -4136,9 +4160,35 @@ function ensurePlayerShape(p) {
   if (typeof p.isGK !== 'boolean') p.isGK = p.position === 'Portero';
   if (typeof p.birthDate !== 'string') p.birthDate = '';   // ISO YYYY-MM-DD
   if (!p.team || !TEAMS.includes(p.team)) p.team = 'Senior A';  // default team
+  if (typeof p.leftDate !== 'string') p.leftDate = '';     // ISO YYYY-MM-DD; '' = active
   // keep isGK in sync with position
   p.isGK = p.position === 'Portero';
   return p;
+}
+
+// A player who left the club (leftDate set) is hidden from attendance,
+// call-ups and live pickers for dates on/after leftDate, but kept everywhere
+// historical (stats, history, reports). refDate: ISO date of the activity or
+// match being worked on; omitted = today.
+function isPlayerActive(p, refDate) {
+  if (!p || !p.leftDate) return true;
+  const ref = (refDate || todayISO()).slice(0, 10);
+  return ref < p.leftDate;
+}
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+// Players selectable in the match view (live or historical edit).
+function matchRoster() {
+  return state.roster.filter(p => isPlayerActive(p, state.match && state.match.date));
+}
+// Small "BAJA" tag for reports/dropdowns (html) and CSV (plain).
+function leftTagHtml(p) {
+  return p && p.leftDate ? ' <span class="left-badge" title="Baja desde ' + p.leftDate + '">BAJA</span>' : '';
+}
+function leftTagText(p) {
+  return p && p.leftDate ? ' (BAJA)' : '';
 }
 
 function ensureStaffShape(s) {
@@ -5555,7 +5605,7 @@ function renderAtkDefBenchStep() {
   });
   const convokedSet = getConvokedPlayerIds(); // Set or null
 
-  const benchPlayers = state.roster
+  const benchPlayers = matchRoster()
     .filter(pl => !onCourtIds.has(pl.id))       // not on court
     .filter(pl => !expelled.has(pl.id))         // not sent off
     .filter(pl => !inUseIds.has(pl.id))         // not in another pair
@@ -6014,7 +6064,7 @@ function renderPenaltyPlayerGrid(listId, step) {
   const expelled = new Set(state.match.expelledPlayers || []);
   const convokedIds = getConvokedPlayerIds();  // Set or null
   const benchPlayers = allowBench
-    ? state.roster
+    ? matchRoster()
         .filter(p => !onCourtIds.includes(p.id) && !expelled.has(p.id))
         .filter(p => convokedIds ? convokedIds.has(p.id) : true)
         .sort((a, b) => (a.number || 99) - (b.number || 99))
@@ -6487,9 +6537,9 @@ function renderCardModalLists() {
   const convoked = getConvokedPlayerIds();
   let benchPlayers;
   if (convoked && convoked.size > 0) {
-    benchPlayers = state.roster.filter(p => convoked.has(p.id) && !onCourtIds.includes(p.id) && !expelled.has(p.id));
+    benchPlayers = matchRoster().filter(p => convoked.has(p.id) && !onCourtIds.includes(p.id) && !expelled.has(p.id));
   } else {
-    benchPlayers = state.roster.filter(p => !onCourtIds.includes(p.id) && !expelled.has(p.id));
+    benchPlayers = matchRoster().filter(p => !onCourtIds.includes(p.id) && !expelled.has(p.id));
   }
   benchPlayers.sort((a,b) => (a.number||0)-(b.number||0));
   benchEl.innerHTML = benchPlayers.length
@@ -7524,7 +7574,7 @@ function bindEventRows(container) {
 function renderPlayerGrid() {
   const grid = document.getElementById('playerGrid');
   grid.innerHTML = '';
-  let players = [...state.roster];
+  let players = matchRoster();
 
   // Never allow expelled players to be selected again this match
   const expelled = new Set(state.match.expelledPlayers || []);
@@ -7604,21 +7654,42 @@ function renderPlayerGrid() {
 function renderRoster() {
   const list = document.getElementById('rosterList');
   list.innerHTML = '';
+  // Counts only active players; those who left are listed apart at the end.
+  const activeCount = state.roster.filter(p => !p.leftDate).length;
   const countEl = document.getElementById('rosterCount');
-  if (countEl) countEl.textContent = state.roster.length;
+  if (countEl) countEl.textContent = activeCount;
   const countHeader = document.getElementById('rosterCountHeader');
-  if (countHeader) countHeader.textContent = state.roster.length;
+  if (countHeader) countHeader.textContent = activeCount;
 
-  // Sort by shirt number ascending (players with no number go last)
+  // Active first, then players who left; each group by shirt number ascending
+  // (players with no number go last)
   const sorted = [...state.roster].sort((a, b) => {
+    const la = a.leftDate ? 1 : 0, lb = b.leftDate ? 1 : 0;
+    if (la !== lb) return la - lb;
     const na = a.number != null ? Number(a.number) : 999;
     const nb = b.number != null ? Number(b.number) : 999;
     return na - nb;
   });
+  const leftCount = state.roster.length - activeCount;
+  let leftTitleDone = false;
   sorted.forEach(p => {
     ensurePlayerShape(p);
+    if (p.leftDate && !leftTitleDone) {
+      leftTitleDone = true;
+      const t = document.createElement('div');
+      t.className = 'roster-section-title';
+      t.textContent = `Bajas (${leftCount}) — se conservan en historial y estadísticas`;
+      list.appendChild(t);
+    }
     const div = document.createElement('div');
-    div.className = 'roster-item';
+    div.className = 'roster-item' + (p.leftDate ? ' is-left' : '');
+    // Leave controls: active → "Dar de baja"; left → editable date + "Reactivar"
+    const leaveCtrl = p.leftDate
+      ? `<span class="left-badge">BAJA</span>
+         <span class="roster-item-label">Desde</span>
+         <input type="date" value="${p.leftDate}" data-id="${p.id}" data-field="leftDate" style="width:150px;">
+         <button class="btn btn-ghost" data-reactivate="${p.id}" style="padding:6px 10px; font-size:12px;">Reactivar</button>`
+      : `<button class="btn btn-ghost" data-leave="${p.id}" style="padding:6px 10px; font-size:12px;">Dar de baja</button>`;
     const posOptions = POSITIONS.map(pos =>
       `<option value="${pos}" ${p.position === pos ? 'selected' : ''}>${pos}</option>`
     ).join('');
@@ -7648,7 +7719,10 @@ function renderRoster() {
         <span class="roster-item-label">F. Nac.</span>
         <input type="date" value="${p.birthDate || ''}" data-id="${p.id}" data-field="birthDate" style="width:150px;">
         <span class="age-badge" title="Edad calculada">${ageFromBirthDate(p.birthDate) !== null ? ageFromBirthDate(p.birthDate) + ' años' : '—'}</span>
-        <button class="btn btn-danger" data-del="${p.id}" style="padding:6px 10px; font-size:12px; margin-left:auto;">Eliminar</button>
+        <span style="margin-left:auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          ${leaveCtrl}
+          <button class="btn btn-danger" data-del="${p.id}" style="padding:6px 10px; font-size:12px;">Eliminar</button>
+        </span>
       </div>
       <div class="roster-traits-row">
         <span class="roster-item-label" style="align-self:center;">Características</span>
@@ -7680,6 +7754,26 @@ function renderRoster() {
       else p.traits.push(trait);
       savePlayer(p);
       renderRoster();
+    });
+  });
+  list.querySelectorAll('[data-leave]').forEach(b => {
+    b.addEventListener('click', e => {
+      const p = state.roster.find(x => x.id === e.currentTarget.dataset.leave);
+      if (!p) return;
+      if (!confirm(`¿Dar de baja a ${displayName(p)}?\n\nNo se borra nada: sigue en historial, estadísticas e informes (marcado como BAJA), pero no saldrá en nuevas asistencias, convocatorias ni partidos.\n\nFecha de baja: hoy (puedes cambiarla después).`)) return;
+      p.leftDate = todayISO();
+      savePlayer(p);
+      renderAll();
+    });
+  });
+  list.querySelectorAll('[data-reactivate]').forEach(b => {
+    b.addEventListener('click', e => {
+      const p = state.roster.find(x => x.id === e.currentTarget.dataset.reactivate);
+      if (!p) return;
+      if (!confirm(`¿Reactivar a ${displayName(p)}?`)) return;
+      p.leftDate = '';
+      savePlayer(p);
+      renderAll();
     });
   });
   list.querySelectorAll('[data-del]').forEach(b => {
@@ -8639,7 +8733,7 @@ async function renderPlayerStatsView() {
     psSelectedPlayerId = sortedRoster[0].id;
   }
   picker.innerHTML = sortedRoster.map(p =>
-    `<option value="${p.id}" ${p.id === psSelectedPlayerId ? 'selected' : ''}>${p.number ?? '·'} · ${escapeHtml(displayName(p))}</option>`
+    `<option value="${p.id}" ${p.id === psSelectedPlayerId ? 'selected' : ''}>${p.number ?? '·'} · ${escapeHtml(displayName(p))}${leftTagText(p)}</option>`
   ).join('');
 
   // 2) Compute the same aggregation as Estadísticas.
@@ -9977,9 +10071,9 @@ function renderBench() {
   // If no attendance defined for the linked Partido activity, show all roster as fallback.
   let benchPlayers;
   if (convokedIds && convokedIds.size > 0) {
-    benchPlayers = state.roster.filter(p => convokedIds.has(p.id) && !onCourtIds.has(p.id));
+    benchPlayers = matchRoster().filter(p => convokedIds.has(p.id) && !onCourtIds.has(p.id));
   } else {
-    benchPlayers = state.roster.filter(p => !onCourtIds.has(p.id));
+    benchPlayers = matchRoster().filter(p => !onCourtIds.has(p.id));
   }
   // Plain title — no position labels or extra descriptions
   titleEl.textContent = 'Suplentes';
@@ -10128,11 +10222,11 @@ function renderActivitiesList() {
   // Get attendance counts in parallel
   Promise.all(sorted.map(a => loadAttendanceForActivity(a.id))).then(() => {
     list.innerHTML = '';
-    const totalPlayers = state.roster.length;
     const totalStaff = state.staff.length;
     const playerIds = new Set(state.roster.map(p => p.id));
     const staffIds = new Set(state.staff.map(s => s.id));
     sorted.forEach(act => {
+      const totalPlayers = state.roster.filter(p => isPlayerActive(p, act.date)).length;
       const recs = state.attendanceByActivity[act.id] || [];
       // Split "attends" counts by person type. Attendance=true covers both "Sí"
       // and "Tarde" (Tarde = asistencia:true + puntualidad:false).
@@ -10291,8 +10385,10 @@ function renderAttendanceBody() {
   const records = state.attendanceByActivity[openActivityId] || [];
   const byPerson = Object.fromEntries(records.map(r => [r.personId, r]));
 
-  // Plantilla: ordenada por dorsal ascendente (los sin dorsal, al final)
-  const players = [...state.roster].sort((a, b) => {
+  // Plantilla: ordenada por dorsal ascendente (los sin dorsal, al final).
+  // Players who left before this activity's date are hidden.
+  const act = state.activities.find(a => a.id === openActivityId);
+  const players = state.roster.filter(p => isPlayerActive(p, act && act.date)).sort((a, b) => {
     const na = a.number != null ? Number(a.number) : 999;
     const nb = b.number != null ? Number(b.number) : 999;
     return na - nb;
@@ -10519,7 +10615,7 @@ async function renderMonthlyReport() {
   if (players.length > 0) {
     html += `<tr class="section-head"><td colspan="${monthActs.length + 1}">Plantilla</td></tr>`;
     players.forEach(p => {
-      html += `<tr><td class="col-name">${p.number || ''} · ${escapeHtml(p.alias || p.name)} <span style="color:#64748b; font-size:10px;">${p.position}</span></td>`;
+      html += `<tr><td class="col-name">${p.number || ''} · ${escapeHtml(p.alias || p.name)}${leftTagHtml(p)} <span style="color:#64748b; font-size:10px;">${p.position}</span></td>`;
       monthActs.forEach(a => { html += cellFor(p.id, a.id); });
       html += '</tr>';
     });
@@ -10618,7 +10714,7 @@ async function renderDetailedReport() {
     html += `
       <div class="detail-player-block">
         <div class="detail-player-header">
-          <span class="detail-player-name">#${p.number ?? '·'} · ${escapeHtml(p.name)}</span>
+          <span class="detail-player-name">#${p.number ?? '·'} · ${escapeHtml(p.name)}${leftTagHtml(p)}</span>
           <div class="detail-summary">
             <span class="detail-chip chip-training">🏃 Entrenos: <b>${trainAtt}</b> / ${trainingActs.length}</span>
             <span class="detail-chip chip-match">⚽ Convocado: <b>${matchConv}</b> / ${matchActs.length}</span>
@@ -10746,7 +10842,7 @@ function renderDetailPlayerPicker() {
     <label style="display:flex; align-items:center; gap:6px; padding:4px 6px; background:#fff; border-radius:6px; cursor:pointer; font-size:13px;">
       <input type="checkbox" data-pick-pid="${p.id}" ${detailSelectedPlayerIds.has(p.id) ? 'checked' : ''}>
       <span style="font-weight:700; color:#334155;">${p.number ?? '·'}</span>
-      <span style="flex:1;">${escapeHtml(p.name)}</span>
+      <span style="flex:1;">${escapeHtml(p.name)}${leftTagHtml(p)}</span>
       <span class="team-badge ${teamCls}" style="font-size:9px;">${escapeHtml(p.team || 'Senior A')}</span>
     </label>
   `;}).join('');
@@ -10814,7 +10910,7 @@ function exportDetailedReportCsv() {
       const tarde = (rec && rec.asistencia === true && rec.puntualidad === false) ? 'Sí' : '';
       rows.push([
         p.number ?? '',
-        p.name || '',
+        (p.name || '') + leftTagText(p),
         p.team || 'Senior A',
         a.date || '',
         a.time || '',
@@ -10949,7 +11045,7 @@ async function renderAsistenciaReport() {
       <tr>
         <td class="col-name">
           <span class="dorsal">${r.player.number ?? '·'}</span>
-          <span class="name">${escapeHtml(r.player.name)}</span>
+          <span class="name">${escapeHtml(r.player.name)}${leftTagHtml(r.player)}</span>
         </td>
         <td class="cell-count">${r.trainAtt}/${totalTrain}</td>
         <td class="cell-count">${r.matchConv}/${totalMatch}</td>
@@ -11019,7 +11115,7 @@ function exportAsistenciaReportCsv() {
     const motiveVals = ABSENCE_MOTIVES.map(m => motiveCounts[m.code] || 0);
     rows.push([
       p.number ?? '',
-      p.name || '',
+      (p.name || '') + leftTagText(p),
       p.team || 'Senior A',
       `${trainAtt}/${totalTrain}`,
       `${matchConv}/${totalMatch}`,
