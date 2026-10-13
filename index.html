@@ -10411,7 +10411,7 @@ function renderAttendanceBody() {
     return (a.name || '').localeCompare(b.name || '');
   });
 
-  let html = '<div style="font-size:12px; color:#5b6776; margin-bottom:8px;">Toca el botón correspondiente para registrar. Si no marcas nada, queda como pendiente.</div>';
+  let html = '<div style="font-size:12px; color:#5b6776; margin-bottom:8px;">Toca el botón correspondiente para registrar. Si no marcas nada, queda como pendiente. Vuelve a tocar el botón marcado para quitarlo.</div>';
 
   if (players.length > 0) {
     html += '<div class="att-section-title">Plantilla</div>';
@@ -10507,7 +10507,16 @@ async function handleAttendanceAction(btn) {
   const action = btn.dataset.attAction;
   const rec = await getOrCreateAttRecord(personId, personType);
 
-  if (action === 'yes') {
+  // Tapping the already-active button clears the record back to pending,
+  // otherwise a mistaken "No" could never be undone.
+  const currentAction = rec.asistencia === true
+    ? (rec.puntualidad === false ? 'late' : 'yes')
+    : rec.asistencia === false ? 'no' : null;
+  if (action === currentAction) {
+    rec.asistencia = null;
+    rec.puntualidad = null;
+    rec.motivoAusencia = null;
+  } else if (action === 'yes') {
     rec.asistencia = true;
     rec.puntualidad = true;
     rec.motivoAusencia = null;
@@ -10974,6 +10983,8 @@ function asistenciaCounters(personId, monthActs) {
       if (conv) matchConv++;
     }
     if (rec.asistencia === true && rec.puntualidad === false) tarde++;
+    // A player not called up for a match can't be absent from it.
+    if (a.tipo === 'Partido' && rec.convocado === false) return;
     // Total absences = any time the person didn't show up, regardless of
     // whether a motive was recorded. Then broken down by motive in the
     // per-motive columns.
