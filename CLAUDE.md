@@ -47,7 +47,8 @@ Sin build step, sin framework, JS vanilla, CSS vanilla, HTML embebido en el mism
 
 - **matches**: `{id, date, opponent, competition, venue, scoreFor, scoreAgainst, onCourt, rosterSnapshot, status, timer, mvpPlayerId, juego5For, juego5Against, attackDefenseActive, attackDefensePairs, expelledPlayers, sanctions, ...}`
 - **events**: `{id, matchId, type, playerId, time, period, onCourt, juego5For, juego5Against, atkDef, ...typeSpecific}`
-- **players** (`state.roster`): `{id, name, alias, number, position, isGK, traits, birthDate, team}`
+- **players** (`state.roster`): `{id, name, alias, number, position, isGK, traits, birthDate, team, leftDate}`
+  - `leftDate`: ISO `YYYY-MM-DD` de la baja; `''` = activo. Migrado en `ensurePlayerShape`.
 - **staff**, **activities**, **attendance** (`attendanceByActivity[activityId]`), **subs**.
 
 ### Tipos de evento
@@ -85,6 +86,15 @@ Sin build step, sin framework, JS vanilla, CSS vanilla, HTML embebido en el mism
 - Convocado = `convocado: true AND asistencia: true` (incluye Tarde).
 - Helpers: `getConvokedPlayerIds()`, `convokedIdsForMatch(m)`, `convokedIdsForMatches(ms)`.
 - Filtros de informes por equipo: `Senior A` / `Senior B` / `Juvenil Nacional`.
+- Asistencia: volver a tocar el botón activo (Asiste/No/Tarde) lo deja pendiente. En Partido, un "No" con `convocado: false` no cuenta como ausencia (`asistenciaCounters`).
+- Informe Asistencia: el staff sale con filtro `Senior A` y "Todos" (`asistenciaStaffList`).
+
+### Bajas de jugadores
+- "Dar de baja" en Plantilla → `leftDate` (editable; vacío = reactivar). Nunca se borra nada.
+- `isPlayerActive(p, refDate)`: activo si no tiene baja o `refDate < leftDate`. Usar la fecha de la actividad/partido, no la de hoy.
+- **Ocultar** (por fecha): asistencia/convocatoria (`renderAttendanceBody`) y pickers del partido vía `matchRoster()` (banquillo, cambios, tarjetas, penaltis, Atq/Def).
+- **Mantener** con etiqueta `leftTagHtml(p)` / `leftTagText(p)` ("BAJA"): informes de asistencia, CSV, dropdown Stats x Jugador. Historial y stats sin cambios.
+- Al añadir una lista nueva de jugadores, decidir si es "nueva convocatoria" (filtrar) o "dato histórico" (mantener + etiqueta).
 
 ### Historial
 - **📋 Ver log**: modal read-only con filtros + copiar al portapapeles.
