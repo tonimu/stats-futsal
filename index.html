@@ -5837,8 +5837,8 @@ function goToDuelPlayerStep(kind) {
   duelSelectedKind = kind;
   document.getElementById('duelKindLabel').textContent = DUEL_KIND_LABEL[kind] || kind;
   // A duel is an on-court action, same as chances/recoveries/losses — only players
-  // currently on court are eligible.
-  const onCourtIds = state.match.onCourt.filter(Boolean);
+  // on court are eligible (in insert mode: the court at the reference event).
+  const onCourtIds = getEventContext().onCourt.filter(Boolean);
   // Use the same card style as the "chance" action picker: big dorsal + alias + position pill.
   const courtHtml = onCourtIds.map(pid => {
     const p = getPlayer(pid); if (!p) return '';
@@ -5964,7 +5964,7 @@ let penaltyWizard = null;
 
 function openPenaltyPicker(opts = {}) {
   // Warn if fewer than 5 on court, same as other actions.
-  const playing = state.match.onCourt.filter(Boolean).length;
+  const playing = getEventContext().onCourt.filter(Boolean).length;
   if (playing < 5) {
     const label = opts.isDouble ? 'doble penalti' : 'penalti';
     if (!confirm(`Solo hay ${playing}/5 jugadores en pista. ¿Registrar el ${label} igualmente?`)) return;
@@ -6060,7 +6060,10 @@ function renderPenaltyPlayerGrid(listId, step) {
   const list = document.getElementById(listId);
   if (!list) return;
 
-  const onCourtIds = state.match.onCourt.filter(Boolean);
+  // Court at the event's moment (insert mode → reference snapshot)
+  const court = getEventContext().onCourt;
+  const gkSlotId = court[0];
+  const onCourtIds = court.filter(Boolean);
   const onCourtPlayers = onCourtIds.map(pid => getPlayer(pid)).filter(Boolean);
 
   // Only the "shooter" (favour) and "gk" (against) steps allow bench
@@ -6086,7 +6089,7 @@ function renderPenaltyPlayerGrid(listId, step) {
   }
 
   const buildCard = (p, opts = {}) => {
-    const gkCls = state.match.onCourt[0] === p.id ? ' gk' : '';
+    const gkCls = gkSlotId === p.id ? ' gk' : '';
     const benchAttr = opts.fromBench ? ' data-frombench="1"' : '';
     const benchBadge = opts.fromBench
       ? '<div style="font-size:9px; font-weight:800; color:#7c3aed; margin-top:2px; text-transform:uppercase; letter-spacing:0.05em;">⇧ Especialista</div>'
@@ -6532,7 +6535,7 @@ function personCardChip(p, context) {
 }
 
 function renderCardModalLists() {
-  const onCourtIds = state.match.onCourt.filter(Boolean);
+  const onCourtIds = getEventContext().onCourt.filter(Boolean);
   const expelled = new Set(state.match.expelledPlayers);
 
   // On court
@@ -7585,6 +7588,7 @@ function renderPlayerGrid() {
   const grid = document.getElementById('playerGrid');
   grid.innerHTML = '';
   let players = matchRoster();
+  const actionCourt = getEventContext().onCourt;
 
   // Never allow expelled players to be selected again this match
   const expelled = new Set(state.match.expelledPlayers || []);
@@ -7613,8 +7617,9 @@ function renderPlayerGrid() {
       players = players.filter(p => p.position !== 'Portero');
     }
   } else if (pickerMode?.kind === 'action') {
-    // action: limit to on-court players (the action implicates someone playing)
-    players = players.filter(p => state.match.onCourt.includes(p.id));
+    // action: limit to on-court players (the action implicates someone playing).
+    // In insert mode that's the court at the reference event, not the live one.
+    players = players.filter(p => actionCourt.includes(p.id));
   }
 
   // For sub-in (non-GK slot), sort by position then number so similar roles cluster
@@ -7631,7 +7636,7 @@ function renderPlayerGrid() {
     // so the picker mirrors the layout Toni sees on the court. Any player not
     // on court (e.g. rare edge case) sinks to the end sorted by number.
     const slotIndex = new Map();
-    state.match.onCourt.forEach((pid, idx) => { if (pid) slotIndex.set(pid, idx); });
+    actionCourt.forEach((pid, idx) => { if (pid) slotIndex.set(pid, idx); });
     players.sort((a, b) => {
       const sa = slotIndex.has(a.id) ? slotIndex.get(a.id) : 99;
       const sb = slotIndex.has(b.id) ? slotIndex.get(b.id) : 99;
@@ -11537,7 +11542,7 @@ document.querySelectorAll('.action-btn').forEach(b => {
     if (type === 'opp_foul') { logOpponentFoul(); return; }
     if (type === 'opp_chance') { selectAction(type); return; }
     // Our actions: warn if fewer than 5 on court
-    const playing = state.match.onCourt.filter(Boolean).length;
+    const playing = getEventContext().onCourt.filter(Boolean).length;
     if (playing < 5) {
       if (!confirm(`Solo hay ${playing}/5 jugadores en pista. ¿Registrar la acción igualmente?`)) return;
     }
