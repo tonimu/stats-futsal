@@ -2199,6 +2199,16 @@
     border-right: 2px solid #fecaca;
   }
   .asistencia-table tbody tr:hover { background: #f8fafc; }
+  .asistencia-table td.col-name .role { font-size: 10px; color: #64748b; }
+  .asistencia-table tr.asistencia-section-row td {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    background: #f1f5f9;
+  }
 </style>
 </head>
 <body>
@@ -10949,6 +10959,44 @@ function exportDetailedReportCsv() {
 // Each cell is the count of times that motive was recorded for the player
 // in the selected month. Team filter matches the other reports.
 
+// Per-person monthly counters, shared by the on-screen report and the CSV
+// (players and staff use the same attendance records).
+function asistenciaCounters(personId, monthActs) {
+  let trainAtt = 0, matchConv = 0, tarde = 0, totalAusencias = 0;
+  const motiveCounts = {};
+  ABSENCE_MOTIVES.forEach(m => { motiveCounts[m.code] = 0; });
+  monthActs.forEach(a => {
+    const rec = (state.attendanceByActivity[a.id] || []).find(r => r.personId === personId);
+    if (!rec) return;
+    if (a.tipo === 'Entrenamiento' && rec.asistencia === true) trainAtt++;
+    if (a.tipo === 'Partido') {
+      const conv = typeof rec.convocado === 'boolean' ? rec.convocado : (rec.asistencia === true);
+      if (conv) matchConv++;
+    }
+    if (rec.asistencia === true && rec.puntualidad === false) tarde++;
+    // Total absences = any time the person didn't show up, regardless of
+    // whether a motive was recorded. Then broken down by motive in the
+    // per-motive columns.
+    if (rec.asistencia === false) totalAusencias++;
+    if (rec.asistencia === false && rec.motivoAusencia && motiveCounts.hasOwnProperty(rec.motivoAusencia)) {
+      motiveCounts[rec.motivoAusencia]++;
+    }
+  });
+  return { trainAtt, matchConv, tarde, totalAusencias, motiveCounts };
+}
+
+// Staff belongs to the first team: listed under Senior A and "Todos".
+function asistenciaStaffList(teamFilter) {
+  if (teamFilter !== 'Senior A' && teamFilter !== '__all__') return [];
+  const roleOrder = Object.fromEntries(STAFF_ROLES.map((r, i) => [r, i]));
+  return [...state.staff].sort((a, b) => {
+    const ra = roleOrder[a.role] ?? 99;
+    const rb = roleOrder[b.role] ?? 99;
+    if (ra !== rb) return ra - rb;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+}
+
 async function renderAsistenciaReport() {
   const monthInput = document.getElementById('asistenciaMonth');
   if (!monthInput.value) {
@@ -10986,36 +11034,15 @@ async function renderAsistenciaReport() {
     container.innerHTML = '<div style="padding:20px; color:#5b6776; text-align:center;">No hay actividades en este mes.</div>';
     return;
   }
-  if (players.length === 0) {
+  const staff = asistenciaStaffList(teamFilter);
+  if (players.length === 0 && staff.length === 0) {
     container.innerHTML = '<div style="padding:20px; color:#5b6776; text-align:center;">Ningún jugador en el equipo seleccionado.</div>';
     return;
   }
 
-  // 3) Compute per-player counters
-  const rows = players.map(p => {
-    let trainAtt = 0, matchConv = 0, tarde = 0, totalAusencias = 0;
-    const motiveCounts = {};
-    ABSENCE_MOTIVES.forEach(m => { motiveCounts[m.code] = 0; });
-
-    monthActs.forEach(a => {
-      const rec = (state.attendanceByActivity[a.id] || []).find(r => r.personId === p.id);
-      if (!rec) return;
-      if (a.tipo === 'Entrenamiento' && rec.asistencia === true) trainAtt++;
-      if (a.tipo === 'Partido') {
-        const conv = typeof rec.convocado === 'boolean' ? rec.convocado : (rec.asistencia === true);
-        if (conv) matchConv++;
-      }
-      if (rec.asistencia === true && rec.puntualidad === false) tarde++;
-      // Total absences = any time the player didn't show up, regardless of
-      // whether a motive was recorded. Then broken down by motive in the
-      // per-motive columns.
-      if (rec.asistencia === false) totalAusencias++;
-      if (rec.asistencia === false && rec.motivoAusencia && motiveCounts.hasOwnProperty(rec.motivoAusencia)) {
-        motiveCounts[rec.motivoAusencia]++;
-      }
-    });
-    return { player: p, trainAtt, matchConv, tarde, totalAusencias, motiveCounts };
-  });
+  // 3) Compute per-person counters
+  const rows = players.map(p => ({ player: p, ...asistenciaCounters(p.id, monthActs) }));
+  const staffRows = staff.map(s => ({ staff: s, ...asistenciaCounters(s.id, monthActs) }));
 
   // 4) Render the table
   const motiveHeaders = ABSENCE_MOTIVES.map(m =>
@@ -11036,25 +11063,44 @@ async function renderAsistenciaReport() {
       </thead>
       <tbody>
   `;
-  rows.forEach(r => {
+  const countCells = r => {
     const motiveCells = ABSENCE_MOTIVES.map(m => {
       const n = r.motiveCounts[m.code] || 0;
       return `<td class="${n > 0 ? 'has-count' : 'zero'}">${n || ''}</td>`;
     }).join('');
+    return `
+        <td class="cell-count">${r.trainAtt}/${totalTrain}</td>
+        <td class="cell-count">${r.matchConv}/${totalMatch}</td>
+        <td class="${r.tarde > 0 ? 'has-count cell-late' : 'zero'}">${r.tarde || ''}</td>
+        <td class="${r.totalAusencias > 0 ? 'has-count cell-total-ausencias' : 'zero'}">${r.totalAusencias || ''}</td>
+        ${motiveCells}`;
+  };
+  rows.forEach(r => {
     html += `
       <tr>
         <td class="col-name">
           <span class="dorsal">${r.player.number ?? '·'}</span>
           <span class="name">${escapeHtml(r.player.name)}${leftTagHtml(r.player)}</span>
         </td>
-        <td class="cell-count">${r.trainAtt}/${totalTrain}</td>
-        <td class="cell-count">${r.matchConv}/${totalMatch}</td>
-        <td class="${r.tarde > 0 ? 'has-count cell-late' : 'zero'}">${r.tarde || ''}</td>
-        <td class="${r.totalAusencias > 0 ? 'has-count cell-total-ausencias' : 'zero'}">${r.totalAusencias || ''}</td>
-        ${motiveCells}
+        ${countCells(r)}
       </tr>
     `;
   });
+  if (staffRows.length > 0) {
+    html += `<tr class="asistencia-section-row"><td colspan="${5 + ABSENCE_MOTIVES.length}">Staff</td></tr>`;
+    staffRows.forEach(r => {
+      html += `
+      <tr>
+        <td class="col-name">
+          <span class="dorsal">·</span>
+          <span class="name">${escapeHtml(r.staff.name)}</span>
+          <span class="role">${escapeHtml(r.staff.role || '')}</span>
+        </td>
+        ${countCells(r)}
+      </tr>
+    `;
+    });
+  }
   html += '</tbody></table>';
   container.innerHTML = html;
 }
@@ -11083,7 +11129,8 @@ function exportAsistenciaReportCsv() {
     const nb = b.number != null ? Number(b.number) : 999;
     return na - nb;
   });
-  if (players.length === 0) { alert('Ningún jugador en el equipo seleccionado.'); return; }
+  const staff = asistenciaStaffList(teamFilter);
+  if (players.length === 0 && staff.length === 0) { alert('Ningún jugador en el equipo seleccionado.'); return; }
 
   const esc = v => {
     if (v == null) return '';
@@ -11094,35 +11141,21 @@ function exportAsistenciaReportCsv() {
   const header = ['Dorsal', 'Jugador', 'Equipo', 'Entrenos', 'Partidos', 'Tarde', 'Total Ausencias']
     .concat(ABSENCE_MOTIVES.map(m => m.label));
   const rows = [header];
+  const pushRow = (dorsal, name, team, c) => rows.push([
+    dorsal,
+    name,
+    team,
+    `${c.trainAtt}/${totalTrain}`,
+    `${c.matchConv}/${totalMatch}`,
+    c.tarde,
+    c.totalAusencias,
+    ...ABSENCE_MOTIVES.map(m => c.motiveCounts[m.code] || 0),
+  ]);
   players.forEach(p => {
-    let trainAtt = 0, matchConv = 0, tarde = 0, totalAusencias = 0;
-    const motiveCounts = {};
-    ABSENCE_MOTIVES.forEach(m => { motiveCounts[m.code] = 0; });
-    monthActs.forEach(a => {
-      const rec = (state.attendanceByActivity[a.id] || []).find(r => r.personId === p.id);
-      if (!rec) return;
-      if (a.tipo === 'Entrenamiento' && rec.asistencia === true) trainAtt++;
-      if (a.tipo === 'Partido') {
-        const conv = typeof rec.convocado === 'boolean' ? rec.convocado : (rec.asistencia === true);
-        if (conv) matchConv++;
-      }
-      if (rec.asistencia === true && rec.puntualidad === false) tarde++;
-      if (rec.asistencia === false) totalAusencias++;
-      if (rec.asistencia === false && rec.motivoAusencia && motiveCounts.hasOwnProperty(rec.motivoAusencia)) {
-        motiveCounts[rec.motivoAusencia]++;
-      }
-    });
-    const motiveVals = ABSENCE_MOTIVES.map(m => motiveCounts[m.code] || 0);
-    rows.push([
-      p.number ?? '',
-      (p.name || '') + leftTagText(p),
-      p.team || 'Senior A',
-      `${trainAtt}/${totalTrain}`,
-      `${matchConv}/${totalMatch}`,
-      tarde,
-      totalAusencias,
-      ...motiveVals,
-    ]);
+    pushRow(p.number ?? '', (p.name || '') + leftTagText(p), p.team || 'Senior A', asistenciaCounters(p.id, monthActs));
+  });
+  staff.forEach(s => {
+    pushRow('', s.name || '', 'Staff' + (s.role ? ` (${s.role})` : ''), asistenciaCounters(s.id, monthActs));
   });
 
   const csv = rows.map(r => r.map(esc).join(',')).join('\r\n');
