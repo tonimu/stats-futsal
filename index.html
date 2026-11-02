@@ -2534,6 +2534,14 @@
       </div>
     </div>
     <div class="stats-filter-group">
+      <label>Parte</label>
+      <div class="chip-row" id="filterPeriod">
+        <button class="filter-chip active" data-statperiod="all">Ambas</button>
+        <button class="filter-chip" data-statperiod="1">1ª Parte</button>
+        <button class="filter-chip" data-statperiod="2">2ª Parte</button>
+      </div>
+    </div>
+    <div class="stats-filter-group">
       <label>Cálculo</label>
       <div class="chip-row" id="filterCalc">
         <button class="filter-chip active" data-calc="total">Totales</button>
@@ -2605,6 +2613,14 @@
         <button class="filter-chip active" data-j5="all">Todo</button>
         <button class="filter-chip" data-j5="j5for">CNS de 5</button>
         <button class="filter-chip" data-j5="j5against">Rival de 5</button>
+      </div>
+    </div>
+    <div class="stats-filter-group">
+      <label>Parte</label>
+      <div class="chip-row" id="topFilterPeriod">
+        <button class="filter-chip active" data-statperiod="all">Ambas</button>
+        <button class="filter-chip" data-statperiod="1">1ª Parte</button>
+        <button class="filter-chip" data-statperiod="2">2ª Parte</button>
       </div>
     </div>
     <div class="stats-filter-group">
@@ -2681,6 +2697,14 @@
         <button class="filter-chip active" data-j5="all">Todo</button>
         <button class="filter-chip" data-j5="j5for">CNS de 5</button>
         <button class="filter-chip" data-j5="j5against">Rival de 5</button>
+      </div>
+    </div>
+    <div class="stats-filter-group">
+      <label>Parte</label>
+      <div class="chip-row" id="psFilterPeriod">
+        <button class="filter-chip active" data-statperiod="all">Ambas</button>
+        <button class="filter-chip" data-statperiod="1">1ª Parte</button>
+        <button class="filter-chip" data-statperiod="2">2ª Parte</button>
       </div>
     </div>
     <div class="stats-filter-group">
@@ -7817,6 +7841,7 @@ const statsFilters = {
   venue: '',               // '' | 'Local' | 'Visitante'
   selectedMatchIds: null,  // Set of match ids; null = "uninitialised — pick default"
   j5: 'all',               // 'all' | 'j5for' | 'j5against'
+  period: null,            // null = both halves | 1 | 2
   calc: 'total',           // 'total' | 'perMatch' | 'perTime'
   view: 'player',          // 'player' | 'team'
 };
@@ -7926,6 +7951,30 @@ function eventMatchesJ5(e) {
   if (statsFilters.j5 === 'j5for') return !!e.juego5For;
   if (statsFilters.j5 === 'j5against') return !!e.juego5Against;
   return true;
+}
+
+// Combined event filter for the Stats / Top Stats / Stats x Jugador views:
+// J5 situation + half (1ª/2ª parte).
+function eventMatchesStatsFilters(e) {
+  if (statsFilters.period != null && e.period !== statsFilters.period) return false;
+  return eventMatchesJ5(e);
+}
+
+// The half filter is shared by the three stats views: keep all chip rows in sync.
+function syncStatsPeriodChips() {
+  document.querySelectorAll('[data-statperiod]').forEach(c => {
+    const val = c.dataset.statperiod === 'all' ? null : parseInt(c.dataset.statperiod, 10);
+    c.classList.toggle('active', val === statsFilters.period);
+  });
+}
+
+// Subtitle suffix describing the active J5 + half filters.
+function statsFiltersSuffix() {
+  const j5txt = statsFilters.j5 === 'j5for' ? ' · jugando de 5'
+              : statsFilters.j5 === 'j5against' ? ' · rival de 5' : '';
+  const ptxt = statsFilters.period === 1 ? ' · 1ª parte'
+             : statsFilters.period === 2 ? ' · 2ª parte' : '';
+  return j5txt + ptxt;
 }
 
 // Get the set of convoked player ids for a given match (via its linked activity).
@@ -8045,10 +8094,14 @@ async function computeAggregatedStats(selectedMatches) {
       appeared.forEach(pid => { if (byPlayer[pid]) byPlayer[pid].matchesPlayed++; });
     }
 
-    // Minutes (not affected by J5 filter — minutes are minutes)
+    // Minutes (not affected by J5 filter — minutes are minutes). With a half
+    // selected, only the stints of that half count.
+    const per = statsFilters.period;
     for (const [pid, s] of Object.entries(data.subs)) {
       if (!byPlayer[pid]) continue;
-      const mins = m.isActive ? getPlayerMatchSeconds(pid) : (s.totalSeconds || 0);
+      const mins = per != null
+        ? computePlayerSecondsForPeriod(s, per, m.isActive)
+        : (m.isActive ? getPlayerMatchSeconds(pid) : (s.totalSeconds || 0));
       if (mins > 0) byPlayer[pid].minutes += mins;
     }
 
@@ -8057,7 +8110,9 @@ async function computeAggregatedStats(selectedMatches) {
     // just loaded. Not filtered by J5 — same rationale as minutes.
     for (const [pid, s] of Object.entries(data.subs)) {
       if (!byPlayer[pid]) continue;
-      const rots = m.isActive ? getPlayerRotationsCount(pid) : countRotationsFromSub(s);
+      const rots = per != null
+        ? countRotationsFromSubForPeriod(s, per)
+        : (m.isActive ? getPlayerRotationsCount(pid) : countRotationsFromSub(s));
       if (rots > 0) byPlayer[pid].rotations += rots;
     }
 
@@ -8068,7 +8123,7 @@ async function computeAggregatedStats(selectedMatches) {
     const yellowsByPlayerInMatch = {};
     for (const e of data.events) {
       if (e.type !== 'yellow' || !e.playerId) continue;
-      if (!eventMatchesJ5(e)) continue;
+      if (!eventMatchesStatsFilters(e)) continue;
       yellowsByPlayerInMatch[e.playerId] = (yellowsByPlayerInMatch[e.playerId] || 0) + 1;
     }
     for (const [pid, count] of Object.entries(yellowsByPlayerInMatch)) {
@@ -8078,7 +8133,7 @@ async function computeAggregatedStats(selectedMatches) {
 
     // Events (filtered by J5 situation)
     for (const e of data.events) {
-      if (!eventMatchesJ5(e)) continue;
+      if (!eventMatchesStatsFilters(e)) continue;
       if (!e.playerId || !byPlayer[e.playerId]) continue;
       const s = byPlayer[e.playerId];
       if (e.type === 'chance') {
@@ -8184,7 +8239,7 @@ async function computeTeamStats(selectedMatches, periodFilter = null, ignoreJ5Fi
       evts = evts.filter(e => !!e.atkDef === atkDefFilter);
     }
     for (const e of evts) {
-      if (!ignoreJ5Filter && !eventMatchesJ5(e)) continue;
+      if (!ignoreJ5Filter && !eventMatchesStatsFilters(e)) continue;
       if (e.type === 'chance') {
         us.chances++;
         if (e.result==='gol') us.goals++;
@@ -8233,6 +8288,7 @@ function renderStatsFilters() {
   document.querySelectorAll('#filterJuego5 .filter-chip').forEach(c => {
     c.classList.toggle('active', (c.dataset.j5 || 'all') === statsFilters.j5);
   });
+  syncStatsPeriodChips();
   document.querySelectorAll('#filterCalc .filter-chip').forEach(c => {
     c.classList.toggle('active', (c.dataset.calc || 'total') === statsFilters.calc);
   });
@@ -8332,8 +8388,7 @@ async function renderStats() {
     return;
   }
 
-  const j5txt = statsFilters.j5 === 'j5for' ? ' · jugando de 5'
-              : statsFilters.j5 === 'j5against' ? ' · rival de 5' : '';
+  const j5txt = statsFiltersSuffix();
   subEl.textContent = `${selected.length} partido${selected.length===1?'':'s'}${j5txt}`;
 
   // Preload attendance for the linked activities (needed for "per match" calc)
@@ -8708,8 +8763,7 @@ async function renderTopStats() {
     }
   }
 
-  const j5txt = statsFilters.j5 === 'j5for' ? ' · jugando de 5'
-              : statsFilters.j5 === 'j5against' ? ' · rival de 5' : '';
+  const j5txt = statsFiltersSuffix();
   if (subEl) subEl.textContent = `${selected.length} partido${selected.length===1?'':'s'}${j5txt}`;
 
   if (topFilters.view === 'team') {
@@ -8791,8 +8845,7 @@ async function renderPlayerStatsView() {
     return;
   }
 
-  const j5txt = statsFilters.j5 === 'j5for' ? ' · jugando de 5'
-              : statsFilters.j5 === 'j5against' ? ' · rival de 5' : '';
+  const j5txt = statsFiltersSuffix();
   if (subEl) subEl.textContent = `${selected.length} partido${selected.length===1?'':'s'}${j5txt}`;
 
   renderPlayerStatsCard(player, teamPool, selected, content);
@@ -9154,7 +9207,7 @@ async function renderTopQuintets(selected, content) {
 
     // 1) Event-based counters (goals, chances, etc.) — same as before.
     for (const e of data.events) {
-      if (!eventMatchesJ5(e)) continue;
+      if (!eventMatchesStatsFilters(e)) continue;
       const ids = [...(e.onCourt || [])].filter(Boolean).sort();
       if (ids.length !== 5) continue;
       const key = ids.join('|');
@@ -9184,7 +9237,7 @@ async function renderTopQuintets(selected, content) {
     const PL = m.periodLength || (m.match && m.match.periodLength) || 20*60;
     const evsByPeriod = { 1: [], 2: [] };
     for (const e of data.events) {
-      if (!eventMatchesJ5(e)) continue;
+      if (!eventMatchesStatsFilters(e)) continue;
       if (!Array.isArray(e.onCourt)) continue;
       if (e.period !== 1 && e.period !== 2) continue;
       evsByPeriod[e.period].push(e);
@@ -11772,6 +11825,7 @@ function renderTopFilters() {
     c.classList.toggle('active', (c.dataset.venue||'') === statsFilters.venue));
   document.querySelectorAll('#topFilterJuego5 .filter-chip').forEach(c =>
     c.classList.toggle('active', (c.dataset.j5||'all') === statsFilters.j5));
+  syncStatsPeriodChips();
   document.querySelectorAll('#topFilterCalc .filter-chip').forEach(c =>
     c.classList.toggle('active', (c.dataset.calc||'total') === statsFilters.calc));
   document.querySelectorAll('#topFilterView .filter-chip').forEach(c =>
@@ -11820,6 +11874,7 @@ function renderPlayerStatsFilters() {
     c.classList.toggle('active', (c.dataset.venue||'') === statsFilters.venue));
   document.querySelectorAll('#psFilterJuego5 .filter-chip').forEach(c =>
     c.classList.toggle('active', (c.dataset.j5||'all') === statsFilters.j5));
+  syncStatsPeriodChips();
   document.querySelectorAll('#psFilterCalc .filter-chip').forEach(c =>
     c.classList.toggle('active', (c.dataset.calc||'total') === statsFilters.calc));
   document.getElementById('psSelectAll').classList.toggle('active', statsFilters.matchSelMode === 'all');
@@ -11863,6 +11918,19 @@ document.querySelectorAll('#topFilterVenue .filter-chip').forEach(c => {
 });
 document.querySelectorAll('#topFilterJuego5 .filter-chip').forEach(c => {
   c.addEventListener('click', () => { statsFilters.j5 = c.dataset.j5||'all'; renderTopFilters(); renderTopStats(); });
+});
+// Parte (1ª / 2ª / Ambas) — shared by Estadísticas, Top Stats and Stats x Jugador
+[['filterPeriod', () => renderStats()],
+ ['topFilterPeriod', () => renderTopStats()],
+ ['psFilterPeriod', () => renderPlayerStatsView()],
+].forEach(([rowId, rerender]) => {
+  document.querySelectorAll(`#${rowId} [data-statperiod]`).forEach(c => {
+    c.addEventListener('click', () => {
+      statsFilters.period = c.dataset.statperiod === 'all' ? null : parseInt(c.dataset.statperiod, 10);
+      syncStatsPeriodChips();
+      rerender();
+    });
+  });
 });
 document.querySelectorAll('#topFilterCalc .filter-chip').forEach(c => {
   c.addEventListener('click', () => { statsFilters.calc = c.dataset.calc||'total'; renderTopFilters(); renderTopStats(); });

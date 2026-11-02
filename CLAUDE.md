@@ -167,6 +167,9 @@ Antes de cambios arriesgados, exportar JSON desde la app.
 - **`_matchDataCache`**: cache en memoria. Invalidar con `invalidateMatchDataCache(matchId)` tras editar histórico.
 - **`buildEventTableRow(evt, opts)`** acepta `{matchEventsOverride, readOnly}` para reutilizar en log del historial.
 - **`statsFilters`** compartido entre Estadísticas / Top Stats / Stats x Jugador.
+  - Filtrar eventos con `eventMatchesStatsFilters(e)` (J5 + parte), no con `eventMatchesJ5` a secas.
+  - `statsFilters.period` (`null` | 1 | 2): con parte elegida, minutos/rotaciones salen de `computePlayerSecondsForPeriod` / `countRotationsFromSubForPeriod`. "Partidos convocado" no se filtra por parte.
+  - El panel de stats en vivo (vista Partido) tiene su propio filtro de parte (`liveStatsState.period`) e ignora el global.
 - **`opp_card`** no se cuenta en stats del equipo (agregaciones filtran por `yellow|red` puros).
 - **Doble amarilla** = expulsión. Igual para dorsal rival.
 - **Reloj no corre** en modo edición histórica. Play avisa y bloquea.
